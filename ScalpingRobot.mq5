@@ -62,7 +62,7 @@ int OnInit()
     CreateDashboard();
     EventSetTimer(1);
 
-    string startMsg = "🚀 *GOAT Robot v3.0 - Online*\n\n";
+    string startMsg = "🚀 *GOAT Robot v3.1 - Online*\n\n";
     startMsg += "Symbol: " + _Symbol + "\n";
     startMsg += "Magic: " + IntegerToString(InpMagic) + "\n";
     startMsg += "Risk: " + DoubleToString(RiskPercent, 1) + "%\n";
@@ -71,6 +71,7 @@ int OnInit()
     if(TimeCurrent() > exp) { Alert("❌ License expired"); return INIT_FAILED; }
 
     SendTelegramMessage(startMsg);
+    Print("GOAT: Bot initialized successfully.");
     return(INIT_SUCCEEDED);
 }
 
@@ -90,6 +91,12 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
+    // Warning for Algo Trading
+    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) {
+        DrawLabel("DASH_VAL_ST", DashboardX + 110, DashboardY + 190, "ALGO OFF", 9, clrYellow);
+        return;
+    }
+
     if(!BotEnabled) { UpdateDashboard(); return; }
 
     TrailStop();
@@ -102,7 +109,13 @@ void OnTick()
     int Hournow = time.hour;
     SHchoice = SHInput; EHChoice = EHInput;
 
-    if(Hournow < SHchoice || (Hournow >= EHChoice && EHChoice != 0)) { CloseAllOrders(); return; }
+    if(Hournow < SHchoice || (Hournow >= EHChoice && EHChoice != 0)) {
+        if(OrdersTotal() > 0) {
+            Print("GOAT: Outside trading hours. Closing pending orders.");
+            CloseAllOrders();
+        }
+        return;
+    }
 
     int BuyTotal=0, SellTotal=0;
     for(int i = PositionsTotal()-1; i>=0; i--) {
@@ -118,8 +131,20 @@ void OnTick()
         }
     }
 
-    if(BuyTotal <= 0) { double high = findHigh(); if(high > 0) SendBuyOrder(high); }
-    if(SellTotal <= 0) { double low = findLow(); if(low > 0) SendSellOrder(low); }
+    if(BuyTotal <= 0) {
+        double high = findHigh();
+        if(high > 0) {
+            Print("GOAT: Attempting Buy Stop at ", high);
+            SendBuyOrder(high);
+        }
+    }
+    if(SellTotal <= 0) {
+        double low = findLow();
+        if(low > 0) {
+            Print("GOAT: Attempting Sell Stop at ", low);
+            SendSellOrder(low);
+        }
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -144,7 +169,7 @@ void CreateDashboard()
     int w = 220; int h = 230;
     DrawRect("DASH_BG", DashboardX, DashboardY, w, h, DashboardColor);
     DrawRect("DASH_HDR", DashboardX, DashboardY, w, 30, clrBlack);
-    DrawLabel("DASH_LBL_TITLE", DashboardX + 45, DashboardY + 8, "GOAT ROBOT v3.0", 10, TextColor, "Arial Bold");
+    DrawLabel("DASH_LBL_TITLE", DashboardX + 45, DashboardY + 8, "GOAT ROBOT v3.1", 10, TextColor, "Arial Bold");
     int y = DashboardY + 40, step = 25;
     DrawLabel("DASH_LBL_BAL_T", DashboardX + 10, y, "Initial Balance:", 9, TextColor);
     DrawLabel("DASH_VAL_BAL", DashboardX + 110, y, "0.00", 9, clrGold); y += step;
@@ -166,7 +191,7 @@ void UpdateDashboard()
 {
     double bal = AccountInfoDouble(ACCOUNT_BALANCE), equ = AccountInfoDouble(ACCOUNT_EQUITY);
     double prf = ((equ - InitialBalance) / InitialBalance) * 100;
-    double dd  = (1 - equ / bal) * 100;
+    double dd  = (bal > 0) ? (1 - equ / bal) * 100 : 0;
     int buys = 0, sells = 0;
     for(int i=0; i<PositionsTotal(); i++) {
         if(pos.SelectByIndex(i) && pos.Magic()==InpMagic && pos.Symbol()==_Symbol) {
@@ -181,8 +206,11 @@ void UpdateDashboard()
     ObjectSetString(0, "DASH_VAL_BUY", OBJPROP_TEXT, IntegerToString(buys));
     ObjectSetString(0, "DASH_VAL_SEL", OBJPROP_TEXT, IntegerToString(sells));
     ObjectSetString(0, "DASH_VAL_DD", OBJPROP_TEXT, DoubleToString(dd, 2) + "%");
-    ObjectSetString(0, "DASH_VAL_ST", OBJPROP_TEXT, (BotEnabled ? "TRADING" : "PAUSED"));
-    ObjectSetInteger(0, "DASH_VAL_ST", OBJPROP_COLOR, (BotEnabled ? clrCyan : clrTomato));
+
+    string status = (BotEnabled ? "TRADING" : "PAUSED");
+    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) status = "ALGO OFF";
+    ObjectSetString(0, "DASH_VAL_ST", OBJPROP_TEXT, status);
+    ObjectSetInteger(0, "DASH_VAL_ST", OBJPROP_COLOR, (status=="TRADING" ? clrCyan : clrTomato));
 }
 
 //+------------------------------------------------------------------+
@@ -198,28 +226,21 @@ void AnimateBull()
     string H3 = "   /    \\__________________/    \\   ";
     string H4 = "  /      \\                /      \\  ";
     string L1 = " /        \\______________/        \\ ";
-    string L2 = " |   _____                _____   | ";
-    string L3 = " |  /#####\\              /#####\\  | ";
-    string L4 = " |  | (o) |              | (o) |  | ";
-    string L5 = " |  \\_____/              \\_____/  | ";
-    string L6 = " \\          (          )          / ";
-    string L7 = "  \\          \\________/          /  ";
-    string L8 = "   \\____________________________/   ";
-    string S1 = "        *                *        "; // Steam
-
-    color eyeColor = clrTomato; string eyeL = "(o)", eyeR = "(o)";
     string eyebrows = "   _____                _____   ";
+    string eyeL = "(o)", eyeR = "(o)";
+    color eyeColor = clrTomato;
+    string S1 = "        *                *        ";
 
     if(look == 0) { // Furious Straight Ahead
         eyeL = "(X)"; eyeR = "(X)"; eyeColor = clrRed;
-        eyebrows = "   \\\\\\\\\\                /////   "; // Aggressive brows
-        if(frame % 2 == 0) { S1 = "     ~   ^   ~        ~   ^   ~     "; } else { S1 = "     *   ^   *        *   ^   *     "; }
+        eyebrows = "   \\\\\\\\\\                /////   ";
+        if(frame % 2 == 0) S1 = "     ~   ^   ~        ~   ^   ~     "; else S1 = "     *   ^   *        *   ^   *     ";
     } else if(look == 1) { // Left
         eyeL = "(<)"; eyeR = "(<)"; H1 = "    /\\                      /\\      ";
     } else if(look == 2) { // Right
         eyeL = "(>)"; eyeR = "(>)"; H1 = "      /\\                      /\\    ";
     } else { // Up
-        eyeL = "(^)"; eyeR = "(^)"; L6 = " \\          [          ]          / ";
+        eyeL = "(^)"; eyeR = "(^)";
     }
 
     int step = 20;
@@ -233,21 +254,21 @@ void AnimateBull()
     DrawLabel("BULL_EYE_L", BullX + 60, BullY + step*6, eyeL, 16, eyeColor, "Courier New Bold");
     DrawLabel("BULL_EYE_R", BullX + 220, BullY + step*6, eyeR, 16, eyeColor, "Courier New Bold");
     DrawLabel("BULL_L7", BullX, BullY + step*6,  " |  |     |              |     |  | ", 14, clrWhite, "Courier New Bold");
-    DrawLabel("BULL_L8", BullX, BullY + step*7,  L5, 14, clrWhite, "Courier New Bold");
-    DrawLabel("BULL_L9", BullX, BullY + step*8,  L6, 14, clrWhite, "Courier New Bold");
-    DrawLabel("BULL_L10", BullX, BullY + step*9, L7, 14, clrWhite, "Courier New Bold");
-    DrawLabel("BULL_L11", BullX, BullY + step*10,L8, 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L8", BullX, BullY + step*7,  " |  \\_____/              \\_____/  | ", 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L9", BullX, BullY + step*8,  " \\          (          )          / ", 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L10", BullX, BullY + step*9, "  \\          \\________/          /  ", 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L11", BullX, BullY + step*10,"   \\____________________________/   ", 14, clrWhite, "Courier New Bold");
     DrawLabel("BULL_STEAM", BullX + 15, BullY + step*11, S1, 16, clrSkyBlue, "Courier New Bold");
 }
 
 //+------------------------------------------------------------------+
-//| Telegram - Polling Commands                                      |
+//| Telegram - Commands                                              |
 //+------------------------------------------------------------------+
 void CheckTelegramCommands()
 {
     string url = "https://api.telegram.org/bot" + TelegramToken + "/getUpdates?offset=" + IntegerToString(LastUpdateID + 1);
     char data[], result[]; string headers;
-    int res = WebRequest("GET", url, NULL, NULL, 3000, data, 0, result, headers);
+    int res = WebRequest("GET", url, NULL, NULL, 2000, data, 0, result, headers);
 
     if(res == 200)
     {
@@ -282,16 +303,16 @@ void SendCurrentStats()
 {
     string msg = "📊 *GOAT REAL-TIME STATS*\n\n";
     msg += "Bot Status: " + (BotEnabled ? "ON ✅" : "OFF 🛑") + "\n";
-    msg += "Account Balance: " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + "\n";
-    msg += "Profit Actuel: " + DoubleToString(AccountInfoDouble(ACCOUNT_PROFIT), 2) + " " + AccountInfoString(ACCOUNT_CURRENCY) + "\n";
+    msg += "Balance: " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + "\n";
+    msg += "Current P/L: " + DoubleToString(AccountInfoDouble(ACCOUNT_PROFIT), 2) + " " + AccountInfoString(ACCOUNT_CURRENCY) + "\n";
     int active = 0; for(int i=0; i<PositionsTotal(); i++) if(pos.SelectByIndex(i) && pos.Magic()==InpMagic) active++;
-    msg += "Trades en cours: " + IntegerToString(active);
+    msg += "Trades Active: " + IntegerToString(active);
     SendTelegramMessage(msg);
 }
 
 void SendChartScreenshot()
 {
-    string filename = "GOAT_Live.gif";
+    string filename = "GOAT_Screen.gif";
     if(ChartScreenShot(0, filename, 1200, 800, ALIGN_RIGHT))
     {
         string url = "https://api.telegram.org/bot" + TelegramToken + "/sendPhoto";
@@ -316,7 +337,7 @@ void SendChartScreenshot()
 }
 
 //+------------------------------------------------------------------+
-//| Core Trading & Helpers                                           |
+//| Helpers & Core Logic                                             |
 //+------------------------------------------------------------------+
 void SendTelegramMessage(string text) {
     string url = "https://api.telegram.org/bot" + TelegramToken + "/sendMessage";
@@ -408,17 +429,17 @@ double findLow() {
 bool IsNewBar() { static datetime pt = 0; datetime ct = iTime(_Symbol, Timeframe, 0); if(pt != ct) { pt = ct; return true; } return false; }
 
 void SendBuyOrder(double e) {
-    double a = SymbolInfoDouble(_Symbol, SYMBOL_ASK); if(a > e - OrderDistPoints * _Point) return;
+    double a = SymbolInfoDouble(_Symbol, SYMBOL_ASK); if(a > e - OrderDistPoints * _Point) { Print("GOAT: Price too close to high for Buy Stop."); return; }
     double tp = e + Tppoints * _Point, sl = e - Slpoints * _Point, l = calcLots(e-sl);
     datetime ex = iTime(_Symbol, Timeframe, 0) + ExpirationBars * PeriodSeconds(Timeframe);
-    trade.BuyStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, "GOAT BUY");
+    if(trade.BuyStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, "GOAT BUY")) Print("GOAT: Buy Stop placed at ", e);
 }
 
 void SendSellOrder(double e) {
-    double b = SymbolInfoDouble(_Symbol, SYMBOL_BID); if(b < e + OrderDistPoints * _Point) return;
+    double b = SymbolInfoDouble(_Symbol, SYMBOL_BID); if(b < e + OrderDistPoints * _Point) { Print("GOAT: Price too close to low for Sell Stop."); return; }
     double tp = e - Tppoints * _Point, sl = e + Slpoints * _Point, l = calcLots(sl-e);
     datetime ex = iTime(_Symbol, Timeframe, 0) + ExpirationBars * PeriodSeconds(Timeframe);
-    trade.SellStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, "GOAT SELL");
+    if(trade.SellStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, "GOAT SELL")) Print("GOAT: Sell Stop placed at ", e);
 }
 
 double calcLots(double sl) {
@@ -441,3 +462,4 @@ void TrailStop() {
         }
     }
 }
+//+------------------------------------------------------------------+
