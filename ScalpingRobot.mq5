@@ -17,6 +17,7 @@ input int TslTriggerPoints = 15; //Points in profit before Trailing SL is activa
 input int TslPoints = 10; //Trailing Stop loss (10 points = 1 pip)
 input ENUM_TIMEFRAMES Timeframe = PERIOD_CURRENT; //Time frame to run
 input int InpMagic = 123; //Expert advisor identification
+input string TradeComment = "Scalping Robot";
 input string ExpirationDate = "2026.04.08";
 
 input group "=== Telegram Settings ==="
@@ -141,25 +142,44 @@ void OnTimer()
 //+------------------------------------------------------------------+
 void CreateDashboard()
 {
-    int w = 220; int h = 230;
-    DrawRect("DASH_BG", DashboardX, DashboardY, w, h, DashboardColor);
-    DrawRect("DASH_HDR", DashboardX, DashboardY, w, 30, clrBlack);
-    DrawLabel("DASH_LBL_TITLE", DashboardX + 45, DashboardY + 8, "GOAT ROBOT v3.0", 10, TextColor, "Arial Bold");
-    int y = DashboardY + 40, step = 25;
-    DrawLabel("DASH_LBL_BAL_T", DashboardX + 10, y, "Initial Balance:", 9, TextColor);
-    DrawLabel("DASH_VAL_BAL", DashboardX + 110, y, "0.00", 9, clrGold); y += step;
-    DrawLabel("DASH_LBL_EQU_T", DashboardX + 10, y, "Equity:", 9, TextColor);
-    DrawLabel("DASH_VAL_EQU", DashboardX + 110, y, "0.00", 9, TextColor); y += step;
-    DrawLabel("DASH_LBL_PRF_T", DashboardX + 10, y, "Total Profit %:", 9, TextColor);
-    DrawLabel("DASH_VAL_PRF", DashboardX + 110, y, "0.00%", 9, clrLime); y += step;
-    DrawLabel("DASH_LBL_BUY_T", DashboardX + 10, y, "Active Buy:", 9, TextColor);
-    DrawLabel("DASH_VAL_BUY", DashboardX + 110, y, "0", 9, TextColor); y += step;
-    DrawLabel("DASH_LBL_SEL_T", DashboardX + 10, y, "Active Sell:", 9, TextColor);
-    DrawLabel("DASH_VAL_SEL", DashboardX + 110, y, "0", 9, TextColor); y += step;
-    DrawLabel("DASH_LBL_DD_T", DashboardX + 10, y, "Drawdown:", 9, TextColor);
-    DrawLabel("DASH_VAL_DD", DashboardX + 110, y, "0.00%", 9, clrTomato); y += step;
-    DrawLabel("DASH_LBL_ST_T", DashboardX + 10, y, "Status:", 9, TextColor);
-    DrawLabel("DASH_VAL_ST", DashboardX + 110, y, "ACTIVE", 9, clrCyan);
+    int w = 240; int h = 250;
+    int border = 2;
+    // Outer Glow Border
+    DrawRect("DASH_GLOW", DashboardX - border, DashboardY - border, w + border*2, h + border*2, clrCyan);
+    // Main Background
+    DrawRect("DASH_BG", DashboardX, DashboardY, w, h, C'15,15,15');
+    // Header
+    DrawRect("DASH_HDR", DashboardX, DashboardY, w, 35, C'30,30,30');
+    DrawRect("DASH_HDR_LINE", DashboardX, DashboardY + 35, w, 2, clrCyan);
+    DrawLabel("DASH_LBL_TITLE", DashboardX + 50, DashboardY + 10, "GOAT ROBOT v3.5", 10, clrCyan, "Impact");
+
+    int y = DashboardY + 50, step = 28;
+    int col1 = DashboardX + 15, col2 = DashboardX + 45, col3 = DashboardX + 140;
+
+    // Icons (Wingdings)
+    DrawLabel("DASH_ICO_BAL", col1, y, "\x97", 12, clrGold, "Wingdings"); // Money bag
+    DrawLabel("DASH_LBL_BAL", col2, y, "Initial Balance:", 9, TextColor);
+    DrawLabel("DASH_VAL_BAL", col3, y, "0.00", 9, clrGold); y += step;
+
+    DrawLabel("DASH_ICO_EQU", col1, y, "\x99", 12, clrSkyBlue, "Wingdings"); // Chart
+    DrawLabel("DASH_LBL_EQU", col2, y, "Equity:", 9, TextColor);
+    DrawLabel("DASH_VAL_EQU", col3, y, "0.00", 9, TextColor); y += step;
+
+    DrawLabel("DASH_ICO_PRF", col1, y, "\xA4", 12, clrLime, "Wingdings"); // Trophy
+    DrawLabel("DASH_LBL_PRF", col2, y, "Net Profit:", 9, TextColor);
+    DrawLabel("DASH_VAL_PRF", col3, y, "0.00%", 9, clrLime); y += step;
+
+    DrawLabel("DASH_ICO_TRD", col1, y, "\xAA", 12, clrWhite, "Wingdings"); // Briefcase
+    DrawLabel("DASH_LBL_TRD", col2, y, "Active B/S:", 9, TextColor);
+    DrawLabel("DASH_VAL_TRD", col3, y, "0 / 0", 9, TextColor); y += step;
+
+    DrawLabel("DASH_ICO_DD", col1, y, "N", 12, clrTomato, "Wingdings"); // Skull
+    DrawLabel("DASH_LBL_DD", col2, y, "Drawdown:", 9, TextColor);
+    DrawLabel("DASH_VAL_DD", col3, y, "0.00%", 9, clrTomato); y += step;
+
+    DrawLabel("DASH_ICO_ST", col1, y, "t", 12, clrCyan, "Wingdings"); // Hourglass
+    DrawLabel("DASH_LBL_ST", col2, y, "System Status:", 9, TextColor);
+    DrawLabel("DASH_VAL_ST", col3, y, "READY", 9, clrCyan);
 }
 
 void UpdateDashboard()
@@ -178,8 +198,7 @@ void UpdateDashboard()
     ObjectSetString(0, "DASH_VAL_EQU", OBJPROP_TEXT, DoubleToString(equ, 2));
     ObjectSetString(0, "DASH_VAL_PRF", OBJPROP_TEXT, (prf >= 0 ? "+" : "") + DoubleToString(prf, 2) + "%");
     ObjectSetInteger(0, "DASH_VAL_PRF", OBJPROP_COLOR, (prf >= 0 ? clrLime : clrTomato));
-    ObjectSetString(0, "DASH_VAL_BUY", OBJPROP_TEXT, IntegerToString(buys));
-    ObjectSetString(0, "DASH_VAL_SEL", OBJPROP_TEXT, IntegerToString(sells));
+    ObjectSetString(0, "DASH_VAL_TRD", OBJPROP_TEXT, IntegerToString(buys) + " / " + IntegerToString(sells));
     ObjectSetString(0, "DASH_VAL_DD", OBJPROP_TEXT, DoubleToString(dd, 2) + "%");
     ObjectSetString(0, "DASH_VAL_ST", OBJPROP_TEXT, (BotEnabled ? "TRADING" : "PAUSED"));
     ObjectSetInteger(0, "DASH_VAL_ST", OBJPROP_COLOR, (BotEnabled ? clrCyan : clrTomato));
@@ -411,14 +430,14 @@ void SendBuyOrder(double e) {
     double a = SymbolInfoDouble(_Symbol, SYMBOL_ASK); if(a > e - OrderDistPoints * _Point) return;
     double tp = e + Tppoints * _Point, sl = e - Slpoints * _Point, l = calcLots(e-sl);
     datetime ex = iTime(_Symbol, Timeframe, 0) + ExpirationBars * PeriodSeconds(Timeframe);
-    trade.BuyStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, "GOAT BUY");
+    trade.BuyStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, TradeComment);
 }
 
 void SendSellOrder(double e) {
     double b = SymbolInfoDouble(_Symbol, SYMBOL_BID); if(b < e + OrderDistPoints * _Point) return;
     double tp = e - Tppoints * _Point, sl = e + Slpoints * _Point, l = calcLots(sl-e);
     datetime ex = iTime(_Symbol, Timeframe, 0) + ExpirationBars * PeriodSeconds(Timeframe);
-    trade.SellStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, "GOAT SELL");
+    trade.SellStop(l, e, _Symbol, sl, tp, ORDER_TIME_SPECIFIED, ex, TradeComment);
 }
 
 double calcLots(double sl) {
@@ -435,9 +454,31 @@ void TrailStop() {
     double a = SymbolInfoDouble(_Symbol, SYMBOL_ASK), b = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     for(int i=PositionsTotal()-1; i>=0; i--) if(pos.SelectByIndex(i) && pos.Magic()==InpMagic && pos.Symbol()==_Symbol) {
         ulong t = pos.Ticket(); if(pos.PositionType()==POSITION_TYPE_BUY) {
-            if(b-pos.PriceOpen()>TslTriggerPoints*_Point) { double sl=b-(TslPoints*_Point); if(sl > pos.StopLoss() && sl!=0) trade.PositionModify(t, sl, pos.TakeProfit()); }
+            if(b-pos.PriceOpen()>TslTriggerPoints*_Point) {
+                double tp=pos.TakeProfit();
+                double sl=b-(TslPoints*_Point);
+                if(sl > pos.StopLoss() && sl!=0) {
+                    if(trade.PositionModify(t, sl, tp)) {
+                        string msg = "🔄 *Trailing Stop Activated*\n\n";
+                        msg += "Ticket: " + IntegerToString(t) + "\n";
+                        msg += "New SL: " + DoubleToString(sl, _Digits);
+                        SendTelegramMessage(msg);
+                    }
+                }
+            }
         } else {
-            if(a+(TslTriggerPoints*_Point)<pos.PriceOpen()) { double sl = a + (TslPoints * _Point); if(sl<pos.StopLoss() && sl!=0) trade.PositionModify(t,sl,pos.TakeProfit()); }
+            if(a+(TslTriggerPoints*_Point)<pos.PriceOpen()) {
+                double tp = pos.TakeProfit();
+                double sl = a + (TslPoints * _Point);
+                if(sl<pos.StopLoss() && sl!=0) {
+                    if(trade.PositionModify(t,sl,tp)) {
+                        string msg = "🔄 *Trailing Stop Activated*\n\n";
+                        msg += "Ticket: " + IntegerToString(t) + "\n";
+                        msg += "New SL: " + DoubleToString(sl, _Digits);
+                        SendTelegramMessage(msg);
+                    }
+                }
+            }
         }
     }
 }
