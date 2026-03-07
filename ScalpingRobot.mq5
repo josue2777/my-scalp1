@@ -29,8 +29,8 @@ input color  DashboardColor = clrSlateGray; // Dashboard Background Color
 input color  TextColor      = clrWhite;     // Text Color
 input int    DashboardX     = 20;           // Dashboard X Position
 input int    DashboardY     = 80;           // Dashboard Y Position
-input int    BullX          = 20;           // Bull X Position
-input int    BullY          = 350;          // Bull Y Position
+input int    BullX          = 300;          // Bull X Position
+input int    BullY          = 80;           // Bull Y Position
 
 enum StartHour
 {
@@ -315,7 +315,7 @@ void UpdateDashboard()
 }
 
 //+------------------------------------------------------------------+
-//| UI - Angry Bull Animation                                        |
+//| UI - Artistic Angry Bull Animation (Head Only)                   |
 //+------------------------------------------------------------------+
 void AnimateBull()
 {
@@ -323,26 +323,53 @@ void AnimateBull()
     static int look = 0;
     frame++;
 
-    // Change direction randomly
-    if(frame % 4 == 0) look = MathRand() % 4;
+    if(frame % 3 == 0) look = MathRand() % 4;
 
-    string horns = "  ^__^  ";
-    string head  = " (oo)\\_______";
-    string eyes  = " (__)\\       )\\/\\";
-    string mouth = "      ||----w |";
-    string legs  = "      ||     ||";
+    // Artistic Bull Head with Massive Horns
+    string L1 = "  \\            /  ";
+    string L2 = "   \\__      __/   ";
+    string L3 = "      \\____/      ";
+    string L4 = "    _ (oo) _    ";
+    string L5 = "   /  (__)  \\   ";
+    string L6 = "  /          \\  ";
 
-    // "Angry" look modifications based on 'look'
-    if(look == 1) { head = " (xx)\\_______"; horns = " \\\\__// "; } // Left/Angry
-    if(look == 2) { head = " (@@)\\_______"; horns = " //__\\\\ "; } // Right/Angry
-    if(look == 3) { head = " (!!)\\_______"; mouth = "      ||----W |"; } // Up/Furious
+    color eyeColor = clrTomato;
+    string eyeStr = "oo";
 
-    DrawLabel("BULL_TITLE", BullX + 25, BullY - 20, "WALL STREET BULL", 8, clrWhite, "Courier New Bold");
-    DrawLabel("BULL_H", BullX, BullY,      horns, 12, TextColor, "Courier New Bold");
-    DrawLabel("BULL_E", BullX, BullY + 15, head, 12, clrTomato, "Courier New Bold"); // Red eyes/Angry
-    DrawLabel("BULL_N", BullX, BullY + 30, eyes, 12, TextColor, "Courier New Bold");
-    DrawLabel("BULL_M", BullX, BullY + 45, mouth, 12, TextColor, "Courier New Bold");
-    DrawLabel("BULL_L", BullX, BullY + 60, legs, 12, TextColor, "Courier New Bold");
+    if(look == 1) { // Looking Left
+        L1 = " \\            /   ";
+        L2 = "  \\__      __/    ";
+        L3 = "     \\____/       ";
+        L4 = "   _ (<<) _     ";
+        eyeStr = "<<";
+    }
+    if(look == 2) { // Looking Right
+        L1 = "   \\            / ";
+        L2 = "    \\__      __/  ";
+        L3 = "       \\____/     ";
+        L4 = "     _ (>>) _   ";
+        eyeStr = ">>";
+    }
+    if(look == 3) { // Looking Up / Furious
+        L4 = "    _ (!!) _    ";
+        eyeColor = clrRed;
+        eyeStr = "!!";
+    }
+
+    int lineStep = 18;
+    DrawLabel("BULL_TITLE", BullX + 40, BullY - 25, "WALL STREET POWER", 9, clrGold, "Impact");
+
+    // Drawing the massive horns
+    DrawLabel("BULL_L1", BullX, BullY,           L1, 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L2", BullX, BullY + lineStep,   L2, 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L3", BullX, BullY + lineStep*2, L3, 14, clrWhite, "Courier New Bold");
+
+    // Head and Eyes
+    DrawLabel("BULL_L4_BASE", BullX, BullY + lineStep*3, "    _ (  ) _    ", 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L4_EYES", BullX + 65, BullY + lineStep*3, eyeStr, 14, eyeColor, "Courier New Bold");
+
+    DrawLabel("BULL_L5", BullX, BullY + lineStep*4, L5, 14, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_L6", BullX, BullY + lineStep*5, L6, 14, clrWhite, "Courier New Bold");
 }
 
 //+------------------------------------------------------------------+
