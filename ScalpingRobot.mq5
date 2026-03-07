@@ -272,10 +272,10 @@ void CheckTelegramCommands()
 
 long ParseUpdateID(string json)
 {
-    int pos = StringFind(json, "\"update_id\":");
-    if(pos < 0) return 0;
-    int end = StringFind(json, ",", pos);
-    return StringToInteger(StringSubstr(json, pos + 12, end - (pos + 12)));
+    int start_pos = StringFind(json, "\"update_id\":");
+    if(start_pos < 0) return 0;
+    int end = StringFind(json, ",", start_pos);
+    return StringToInteger(StringSubstr(json, start_pos + 12, end - (start_pos + 12)));
 }
 
 void SendCurrentStats()
@@ -328,7 +328,7 @@ void SendTelegramMessage(string text) {
 }
 
 void DrawRect(string name, int x, int y, int w, int h, color col) {
-    if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_RECT_LABEL, 0, 0, 0);
+    if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
     ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x); ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
     ObjectSetInteger(0, name, OBJPROP_XSIZE, w); ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
     ObjectSetInteger(0, name, OBJPROP_BGCOLOR, col); ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
