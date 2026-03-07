@@ -1,48 +1,36 @@
-# Scalping Robot MQL5
+# GOAT Robot v3.0 (XAUUSD)
 
-Ce projet est un Expert Advisor (EA) pour MetaTrader 5 conçu pour le trading de type "Breakout Scalping", optimisé pour l'Or (XAUUSD). Il utilise les cassures des plus hauts et plus bas récents pour entrer en position avec une gestion dynamique du risque.
+Ce projet est une version hautement améliorée d'un Expert Advisor (EA) MetaTrader 5 pour le trading de l'Or (XAUUSD). Il combine une stratégie de breakout robuste avec une interface graphique artistique et un contrôle total à distance via Telegram.
 
-## Fonctionnalités
+## Nouveautés v3.0 (Édition GOAT)
 
-- **Stratégie de Breakout :** Identifie les plus hauts et plus bas sur une période de 200 bougies pour placer des ordres Stop.
-- **Gestion du Risque Dynamique :** Calcule automatiquement la taille des lots en fonction d'un pourcentage du capital (`RiskPercent`).
-- **Trailing Stop :** Sécurise les gains en déplaçant le Stop Loss automatiquement dès qu'un certain niveau de profit est atteint.
-- **Notifications Telegram :** Envoie des messages en temps réel (Ouverture, Fermeture, Trailing Stop) via l'API Telegram.
-- **Contrôle Horaire :** Permet de définir une plage horaire spécifique pour le trading.
-- **Sécurité :** Inclut une vérification de date d'expiration (License).
+- **Art Graphique Dynamique :** Une tête de taureau (Bull) artistique et animée s'affiche sur votre graphique. Elle change d'expression (yeux rouges, fumée sortant des naseaux) selon son état.
+- **Contrôle à distance Telegram :**
+    - `/start` : Active le trading.
+    - `/stop` : Met le bot en pause.
+    - `/stats` : Envoie un rapport détaillé du profit et des trades en cours.
+    - `/screen` : Envoie une capture d'écran HD de votre graphique actuel sur votre téléphone.
+- **Branding GOAT :** Tous les trades sont identifiés par les commentaires "GOAT BUY" ou "GOAT SELL".
+- **Tableau de Bord Pro :** Affichage en temps réel du Capital Initial, de l'Equity, du Profit %, du Drawdown et du statut du bot.
 
 ## Installation
 
-1. Copiez le fichier `ScalpingRobot.mq5` dans votre dossier `MQL5/Experts` de MetaTrader 5.
-2. Ouvrez MetaTrader 5 et compilez le fichier (F7).
-3. **Important pour Telegram :**
-   - Allez dans `Outils` -> `Options` -> `Expert Advisors`.
-   - Cochez "Autoriser WebRequest pour les URL suivantes".
-   - Ajoutez : `https://api.telegram.org`
-4. Attachez l'Expert Advisor à un graphique (Recommandé : XAUUSD, Timeframe M15 ou H1).
+1. Copiez `ScalpingRobot.mq5` dans `MQL5/Experts`.
+2. Configurez Telegram dans MT5 : `Outils` -> `Options` -> `Expert Advisors` -> Autoriser `https://api.telegram.org`.
+3. Les identifiants Telegram fournis sont déjà pré-configurés dans le code.
 
-## Paramètres (Inputs)
+## Paramètres Clés
 
-| Paramètre | Description | Défaut |
-|-----------|-------------|--------|
-| `RiskPercent` | Risque en % du capital par trade | 5.0 |
-| `Tppoints` | Take Profit en points (10 points = 1 pip) | 200 |
-| `Slpoints` | Stop Loss en points | 200 |
-| `TslTriggerPoints`| Profit nécessaire pour activer le Trailing | 15 |
-| `TslPoints` | Distance du Trailing Stop | 10 |
-| `InpMagic` | Identifiant unique pour le bot | 123 |
-| `TelegramToken` | API Token de votre bot Telegram | "" |
-| `TelegramChatID` | Votre Chat ID Telegram | "" |
-| `SHInput` / `EHInput`| Heure de début et de fin de trading | 8 / 21 |
+- **RiskPercent :** Fixé à 3% par défaut pour une gestion saine.
+- **TradeComment :** "GOAT BUY/SELL" pour un suivi précis.
+- **Expiration :** Licencié jusqu'au 08/04/2026.
 
-## Corrections apportées (v1.1)
+## Commandes Telegram
+Envoyez ces messages à votre bot Telegram pour le piloter :
+- `/start` - Relancer le trading.
+- `/stop` - Arrêter d'ouvrir de nouveaux trades.
+- `/stats` - Voir vos performances actuelles.
+- `/screen` - Recevoir une photo du graphique.
 
-- Correction du bug logique dans `findLow()` qui empêchait l'ouverture des ordres SELL.
-- Nettoyage des emojis corrompus dans les messages Telegram.
-- Correction du paramètre `data_size` dans l'appel `WebRequest` pour Telegram.
-- Ajout de vérifications de sécurité sur la sélection des positions et ordres.
-- Standardisation de l'indentation du code.
-
-## Avertissement
-
-Le trading comporte des risques importants. Un Stop Loss de 200 points sur l'Or peut être insuffisant en cas de forte volatilité (comme observé en 2024-2026). Testez toujours cet EA sur un compte démo avant de l'utiliser en conditions réelles.
+---
+*Note: Toujours tester sur un compte démo. L'Or est extrêmement volatil en 2026.*
