@@ -29,8 +29,8 @@ input color  DashboardColor = clrSlateGray; // Dashboard Background Color
 input color  TextColor      = clrWhite;     // Text Color
 input int    DashboardX     = 20;           // Dashboard X Position
 input int    DashboardY     = 80;           // Dashboard Y Position
-input int    BulldogX       = 20;           // Bulldog X Position
-input int    BulldogY       = 350;          // Bulldog Y Position
+input int    BullX          = 20;           // Bull X Position
+input int    BullY          = 350;          // Bull Y Position
 
 enum StartHour
 {
@@ -107,7 +107,7 @@ TradeTracking trackedOrders[];
 double InitialBalance = 0;
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| OnInit                                                           |
 //+------------------------------------------------------------------+
 int OnInit()
 {
@@ -132,7 +132,7 @@ int OnInit()
     InitialBalance = AccountInfoDouble(ACCOUNT_BALANCE);
 
     CreateDashboard();
-    EventSetTimer(1); // Timer for UI and Animation
+    EventSetTimer(1);
 
     SendTelegramMessage(startMsg);
 
@@ -140,7 +140,7 @@ int OnInit()
 }
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| OnDeinit                                                         |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
@@ -166,12 +166,12 @@ void OnDeinit(const int reason)
 
     // Clean up UI
     ObjectsDeleteAll(0, "DASH_");
-    ObjectsDeleteAll(0, "DOG_");
+    ObjectsDeleteAll(0, "BULL_");
     EventKillTimer();
 }
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| OnTick                                                           |
 //+------------------------------------------------------------------+
 void OnTick()
 {
@@ -240,11 +240,11 @@ void OnTick()
 }
 
 //+------------------------------------------------------------------+
-//| OnTimer for Animation                                            |
+//| OnTimer                                                          |
 //+------------------------------------------------------------------+
 void OnTimer()
 {
-    AnimateBulldog();
+    AnimateBull();
     UpdateDashboard();
 }
 
@@ -315,31 +315,34 @@ void UpdateDashboard()
 }
 
 //+------------------------------------------------------------------+
-//| UI - Bulldog Animation                                           |
+//| UI - Angry Bull Animation                                        |
 //+------------------------------------------------------------------+
-void AnimateBulldog()
+void AnimateBull()
 {
     static int frame = 0;
     static int look = 0;
     frame++;
 
-    // Only change look every 3 seconds roughly
-    if(frame % 3 == 0) look = MathRand() % 4; // 0:Center, 1:Left, 2:Right, 3:Up
+    // Change direction randomly
+    if(frame % 4 == 0) look = MathRand() % 4;
 
-    string head = "   /\\___/\\  ";
-    string eyes = "  ( > < ) ";
-    string nose = "  (  =^=  ) ";
-    string mouth = "   (______) ";
+    string horns = "  ^__^  ";
+    string head  = " (oo)\\_______";
+    string eyes  = " (__)\\       )\\/\\";
+    string mouth = "      ||----w |";
+    string legs  = "      ||     ||";
 
-    if(look == 1) { eyes = "  ( < < ) "; head = "  /\\___/\\   "; } // Left
-    if(look == 2) { eyes = "  ( > > ) "; head = "    /\\___/\\ "; } // Right
-    if(look == 3) { eyes = "  ( ^ ^ ) "; mouth = "   (  --  ) "; } // Up
+    // "Angry" look modifications based on 'look'
+    if(look == 1) { head = " (xx)\\_______"; horns = " \\\\__// "; } // Left/Angry
+    if(look == 2) { head = " (@@)\\_______"; horns = " //__\\\\ "; } // Right/Angry
+    if(look == 3) { head = " (!!)\\_______"; mouth = "      ||----W |"; } // Up/Furious
 
-    DrawLabel("DOG_TITLE", BulldogX + 25, BulldogY - 20, "SECURITY DOG", 8, clrWhite, "Courier New Bold");
-    DrawLabel("DOG_H", BulldogX, BulldogY,      head, 12, DashboardColor, "Courier New Bold");
-    DrawLabel("DOG_E", BulldogX, BulldogY + 15, eyes, 12, clrTomato, "Courier New Bold"); // Angry red eyes
-    DrawLabel("DOG_N", BulldogX, BulldogY + 30, nose, 12, DashboardColor, "Courier New Bold");
-    DrawLabel("DOG_M", BulldogX, BulldogY + 45, mouth, 12, DashboardColor, "Courier New Bold");
+    DrawLabel("BULL_TITLE", BullX + 25, BullY - 20, "WALL STREET BULL", 8, clrWhite, "Courier New Bold");
+    DrawLabel("BULL_H", BullX, BullY,      horns, 12, TextColor, "Courier New Bold");
+    DrawLabel("BULL_E", BullX, BullY + 15, head, 12, clrTomato, "Courier New Bold"); // Red eyes/Angry
+    DrawLabel("BULL_N", BullX, BullY + 30, eyes, 12, TextColor, "Courier New Bold");
+    DrawLabel("BULL_M", BullX, BullY + 45, mouth, 12, TextColor, "Courier New Bold");
+    DrawLabel("BULL_L", BullX, BullY + 60, legs, 12, TextColor, "Courier New Bold");
 }
 
 //+------------------------------------------------------------------+
