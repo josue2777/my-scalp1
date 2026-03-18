@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                           ScalpingRobot_GOAT_v7.mq5 |
+//|                                           ScalpingRobot_GOAT_v8.mq5 |
 //|                                  Copyright 2024, TradingBot Pro  |
 //+------------------------------------------------------------------+
 #include <Trade/Trade.mqh>
@@ -11,11 +11,18 @@ CPositionInfo pos;
 COrderInfo ord;
 
 input group "=== Strategy Parameters ==="
-input int    Swing_Length  = 10;         // Pivot window (10 for S&D)
-input int    EMA_Period    = 9;          // Trend Filter (as per script)
-input int    MaxPositions  = 10;         // Max concurrent trades
-input double RiskPercent   = 3.0;        // Risk per trade %
+input int    Swing_Length  = 10;         // Pivot window (for S&D)
+input int    ATR_Period    = 5;          // ATR Period for Supertrend
+input double Multiplier    = 1.5;        // ATR Multiplier
+input int    EMA_Period    = 9;          // EMA Trend Filter Period
+input int    MaxPositions  = 10;         // Max concurrent positions
+input double RiskPercent   = 1.0;        // Risk per trade %
 input string Expiration    = "2026.12.31";
+
+input group "=== Take Profit Levels (%) ==="
+input double TP1_Level     = 0.2;        // TP1 (%)
+input double TP2_Level     = 0.5;        // TP2 (%)
+input int    StopLossPts   = 500;        // Initial Stop Loss (points)
 
 input group "=== Telegram Settings ==="
 input string TelegramToken = "7801637901:AAHAoFEk3eXcOneF5hpy6FIAuD3R_clEAtw";
@@ -33,9 +40,12 @@ int handle_atr, handle_ema;
 double InitialBalance;
 bool BotEnabled = true;
 long LastUpdateID = 0;
-int currentSignal = 0;
-int prevSignal = 0;
 double haOpen_prev=0, haClose_prev=0;
+double haOpen_curr=0, haClose_curr=0;
+double superTrendUp_prev=0, superTrendDn_prev=0, superTrendClose_prev=0;
+double superTrendUp_curr=0, superTrendDn_curr=0, superTrendClose_curr=0;
+int currentTrend = 0;
+int lastTrend = 0;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -43,21 +53,22 @@ double haOpen_prev=0, haClose_prev=0;
 int OnInit()
 {
     trade.SetExpertMagicNumber(777);
-    handle_atr = iATR(_Symbol, _Period, 14);
+    handle_atr = iATR(_Symbol, _Period, ATR_Period);
     handle_ema = iMA(_Symbol, _Period, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
 
     if(handle_atr == INVALID_HANDLE || handle_ema == INVALID_HANDLE) return INIT_FAILED;
 
     InitialBalance = AccountInfoDouble(ACCOUNT_BALANCE);
-    CreateDashboard();
-    EventSetTimer(1);
 
     // Seed Heikin Ashi
     MqlRates r[]; CopyRates(_Symbol, _Period, 1, 1, r);
     haOpen_prev = (r[0].open + r[0].close)/2.0;
     haClose_prev = (r[0].open + r[0].high + r[0].low + r[0].close)/4.0;
 
-    SendTelegramMessage("🚀 *GOAT v7.0 System Online* (S&D + HA Logic)");
+    CreateDashboard();
+    EventSetTimer(1);
+
+    SendTelegramMessage("🚀 *GOAT v8.0 System Online* (Advanced S&D + HA Logic)");
     return(INIT_SUCCEEDED);
 }
 
@@ -75,11 +86,21 @@ void OnTick()
 {
     if(!BotEnabled || TimeCurrent() > StringToTime(Expiration)) { UpdateDashboard(); return; }
 
+    bool isNewBar = IsNewBar();
+    if(isNewBar)
+    {
+        haOpen_prev = haOpen_curr;
+        haClose_prev = haClose_curr;
+        superTrendUp_prev = superTrendUp_curr;
+        superTrendDn_prev = superTrendDn_curr;
+        superTrendClose_prev = superTrendClose_curr;
+    }
+
     // 1. Calculate Recursive Heikin Ashi
-    MqlRates r[]; CopyRates(_Symbol, _Period, 0, 1, r);
-    double haClose = (r[0].open + r[0].high + r[0].low + r[0].close) / 4.0;
-    double haOpen = (haOpen_prev + haClose_prev) / 2.0;
-    haOpen_prev = haOpen; haClose_prev = haClose;
+    double haOpen, haHigh, haLow, haClose;
+    CalculateHeikinAshi(haOpen, haHigh, haLow, haClose);
+    haOpen_curr = haOpen;
+    haClose_curr = haClose;
 
     double emaVal = GetSeriesValue(handle_ema, 0);
     double atrVal = GetSeriesValue(handle_atr, 0);
@@ -90,41 +111,73 @@ void OnTick()
     double pH = iHigh(_Symbol, _Period, hi_idx);
     double pL = iLow(_Symbol, _Period, lo_idx);
 
-    // Draw Zones (Visual confirmation of ported logic)
+    // Draw Zones
     DrawZone("ZONE_SUPPLY", pH, pH - (atrVal * 0.5), clrSalmon);
     DrawZone("ZONE_DEMAND", pL + (atrVal * 0.5), pL, clrPaleGreen);
 
     // 3. Trading Signal (Supertrend + EMA Filter)
-    static double trendUp=0, trendDn=0;
-    double up = haClose - (1.5 * atrVal);
-    double dn = haClose + (1.5 * atrVal);
+    double upBand, dnBand;
+    CalculateSupertrend(haClose, atrVal, currentTrend, upBand, dnBand);
+    superTrendUp_curr = upBand;
+    superTrendDn_curr = dnBand;
+    superTrendClose_curr = haClose;
 
-    if(haClose > trendDn) currentSignal = 1;
-    else if(haClose < trendUp) currentSignal = -1;
+    // Filter by EMA
+    bool isTrendMatch = (currentTrend == 1 && haClose > emaVal) || (currentTrend == -1 && haClose < emaVal);
 
-    trendUp = up; trendDn = dn;
-
-    if(currentSignal != prevSignal)
+    if(currentTrend != lastTrend)
     {
-        CloseCounterTrades(currentSignal);
+        lastTrend = currentTrend;
+        CloseCounterTrades(currentTrend);
+    }
 
-        bool emaFilter = (currentSignal == 1 && haClose > emaVal) || (currentSignal == -1 && haClose < emaVal);
-        if(emaFilter && GetTotalPos() < MaxPositions)
+    if(isTrendMatch && GetTotalPos() < MaxPositions)
+    {
+        // Simple logic: Allow opening up to MaxPositions as long as trend is strong
+        // We only open if we don't have a position opened recently or if signal is fresh
+        if(isNewBar || GetTotalPos() == 0)
         {
-            ExecuteGOATTrade(currentSignal, haClose);
+            ExecuteGOATTrade(currentTrend, haClose);
         }
-        prevSignal = currentSignal;
     }
 
     UpdateDashboard();
 }
 
+//+------------------------------------------------------------------+
+//| Logic - Heikin Ashi Calculation                                  |
+//+------------------------------------------------------------------+
+void CalculateHeikinAshi(double &hO, double &hH, double &hL, double &hC)
+{
+    MqlRates rates[];
+    CopyRates(_Symbol, _Period, 0, 1, rates);
+
+    hC = (rates[0].open + rates[0].high + rates[0].low + rates[0].close) / 4.0;
+    hO = (haOpen_prev + haClose_prev) / 2.0;
+    hH = MathMax(rates[0].high, MathMax(hO, hC));
+    hL = MathMin(rates[0].low, MathMin(hO, hC));
+}
+
+//+------------------------------------------------------------------+
+//| Logic - Supertrend Calculation                                   |
+//+------------------------------------------------------------------+
+void CalculateSupertrend(double closePrice, double atr, int &trend, double &up, double &dn)
+{
+    up = closePrice - (Multiplier * atr);
+    dn = closePrice + (Multiplier * atr);
+
+    if(superTrendClose_prev > superTrendUp_prev) up = MathMax(up, superTrendUp_prev);
+    if(superTrendClose_prev < superTrendDn_prev) dn = MathMin(dn, superTrendDn_prev);
+
+    if(closePrice > superTrendDn_prev) trend = 1;
+    else if(closePrice < superTrendUp_prev) trend = -1;
+}
+
 void ExecuteGOATTrade(int sig, double price)
 {
-    double slDist = 500 * _Point;
-    double sl = (sig == 1) ? price - slDist : price + slDist;
-    double tp = (sig == 1) ? price + 1500 * _Point : price - 1500 * _Point;
-    double lot = CalcLots(slDist);
+    double sl = (sig == 1) ? price - StopLossPts * _Point : price + StopLossPts * _Point;
+    double tp = (sig == 1) ? price + (price * (TP1_Level / 100)) : price - (price * (TP1_Level / 100));
+    double lot = CalcLots(MathAbs(price - sl));
 
     if(sig == 1) trade.Buy(lot, _Symbol, price, sl, tp, "GOAT BUY");
     else trade.Sell(lot, _Symbol, price, sl, tp, "GOAT SELL");
@@ -210,12 +263,12 @@ void SendTelegramPhoto(string file) {
 void CreateDashboard() {
     DrawRect("DASH_BG", DashboardX, DashboardY, 240, 200, DashboardColor);
     DrawRect("DASH_HDR", DashboardX, DashboardY, 240, 30, clrBlack);
-    DrawLabel("DASH_TITLE", DashboardX+50, DashboardY+8, "GOAT TERMINAL v7.0", 10, clrWhite, "Impact");
+    DrawLabel("DASH_TITLE", DashboardX+50, DashboardY+8, "GOAT TERMINAL v8.0", 10, clrWhite, "Impact");
 }
 
 void UpdateDashboard() {
     DrawLabel("DASH_BAL", DashboardX+15, DashboardY+50, "Capital: " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2), 9, clrWhite);
-    DrawLabel("DASH_ACT", DashboardX+15, DashboardY+80, "Trades: " + IntegerToString(GetTotalPos()) + "/10", 9, clrWhite);
+    DrawLabel("DASH_ACT", DashboardX+15, DashboardY+80, "Trades: " + IntegerToString(GetTotalPos()) + "/" + IntegerToString(MaxPositions), 9, clrWhite);
     DrawLabel("DASH_ST",  DashboardX+15, DashboardY+110, "System: " + (BotEnabled?"RUNNING":"PAUSED"), 9, (BotEnabled?clrCyan:clrTomato));
 }
 
@@ -239,10 +292,24 @@ void AnimateBull() {
 }
 
 // Utilities
-double CalcLots(double slDist) {
-    double r = AccountInfoDouble(ACCOUNT_BALANCE) * RiskPercent / 100.0;
-    double l = r / (slDist / _Point * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE));
-    return NormalizeDouble(MathMax(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), l), 2);
+bool IsNewBar()
+{
+    static datetime lastBarTime = 0;
+    datetime currBarTime = iTime(_Symbol, _Period, 0);
+    if(currBarTime != lastBarTime)
+    {
+        lastBarTime = currBarTime;
+        return true;
+    }
+    return false;
+}
+
+double CalcLots(double slRange) {
+    double riskMoney = AccountInfoDouble(ACCOUNT_BALANCE) * RiskPercent / 100.0;
+    double tickVal = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double lot = riskMoney / (slRange / _Point * tickVal);
+    lot = NormalizeDouble(lot, 2);
+    return MathMax(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), MathMin(lot, SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX)));
 }
 int GetTotalPos() { int c=0; for(int i=0; i<PositionsTotal(); i++) if(pos.SelectByIndex(i) && pos.Magic()==777) c++; return c; }
 double GetSeriesValue(int h, int s) { double b[]; CopyBuffer(h, 0, s, 1, b); return b[0]; }
@@ -266,9 +333,9 @@ void DrawLabel(string n, int x, int y, string t, int s, color c, string f="Arial
     ObjectSetInteger(0, n, OBJPROP_COLOR, c); ObjectSetString(0, n, OBJPROP_FONT, f);
 }
 void DrawZone(string n, double t, double b, color c) {
-    ObjectCreate(0, n, OBJ_RECTANGLE_LABEL, 0, 0, 0);
-    ObjectSetInteger(0, n, OBJPROP_XDISTANCE, BullX+250); ObjectSetInteger(0, n, OBJPROP_YDISTANCE, DashboardY);
-    ObjectSetInteger(0, n, OBJPROP_XSIZE, 50); ObjectSetInteger(0, n, OBJPROP_YSIZE, 20);
-    ObjectSetInteger(0, n, OBJPROP_BGCOLOR, c);
+    ObjectCreate(0, n, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, Swing_Length), t, iTime(_Symbol, _Period, 0), b);
+    ObjectSetInteger(0, n, OBJPROP_COLOR, c);
+    ObjectSetInteger(0, n, OBJPROP_FILL, true);
+    ObjectSetInteger(0, n, OBJPROP_BACK, true);
 }
 //+------------------------------------------------------------------+
