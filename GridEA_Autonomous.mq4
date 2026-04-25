@@ -2,7 +2,7 @@
 //|                                           GridEA_Autonomous.mq4 |
 //|       Copyright 2018, Valentinos Galanos <sonidelav@hotmail.com> |
 //+------------------------------------------------------------------+
-#define ver "2.00 Autonomous"
+#define ver "2.00"
 #property copyright "Copyright 2018, Valentinos Galanos <sonidelav@hotmail.com>"
 #property version   ver
 #property strict
@@ -128,7 +128,11 @@ void CGridLine::MarketExecutionOrders()
     string comment = StringFormat("GRID|%G", m_price);
     ResetLastError();
     int tB = OrderSend(Symbol(), OP_BUY, m_lotSize, ask, 3, 0, tp_buy, comment, m_magic, 0, clrBlue);
+    if(tB < 0) Print("Error opening BUY order: ", GetLastError());
+
     int tS = OrderSend(Symbol(), OP_SELL, m_lotSize, bid, 3, 0, tp_sell, comment, m_magic, 0, clrRed);
+    if(tS < 0) Print("Error opening SELL order: ", GetLastError());
+
     m_ordersExecuted = true;
 }
 
@@ -275,8 +279,11 @@ void CGridExpert::Reset()
         {
             if(OrderMagicNumber() == m_Magic && OrderSymbol() == m_Symbol)
             {
-                if(OrderType() <= OP_SELL) OrderClose(OrderTicket(), OrderLots(), OrderClosePrice(), 3, clrWhite);
-                else OrderDelete(OrderTicket());
+                bool res = false;
+                if(OrderType() <= OP_SELL) res = OrderClose(OrderTicket(), OrderLots(), OrderClosePrice(), 3, clrWhite);
+                else res = OrderDelete(OrderTicket());
+
+                if(!res) Print("Error processing order ", OrderTicket(), ": ", GetLastError());
             }
         }
     }
