@@ -1,6 +1,6 @@
-# 📘 Manuel d'Utilisation Personnel – GOAT Hedging & Recovery EA v4.0
+# 📘 Manuel d'Utilisation Personnel – GOAT Hedging & Recovery EA v4.0 (MT4 & MT5)
 
-Bienvenue dans le manuel d'utilisation complet et personnalisé de votre nouvel Expert Advisor **GOAT Hedging & Recovery** pour MetaTrader 5 (XAUUSD / Or sur M5).
+Bienvenue dans le manuel d'utilisation complet et personnalisé de votre nouvel Expert Advisor **GOAT Hedging & Recovery** pour **MetaTrader 4 (`ScalpingRobot.mq4`)** et **MetaTrader 5 (`ScalpingRobot.mq5`)** sur l'Or (XAUUSD M5).
 
 ---
 
@@ -27,7 +27,7 @@ Ce robot est spécialement conçu pour surmonter les faux signaux et les retourn
 
 ## ⚙️ 2. Guide des Paramètres de Configuration
 
-Vous pouvez modifier ces paramètres lors de l'attachement du robot sur votre graphique MT5 :
+Vous pouvez modifier ces paramètres lors de l'attachement du robot sur votre graphique MT4 ou MT5 :
 
 ### 📊 Stratégie & Taille de Lot
 - **Swing_Length (défaut : 12) :** Rayon de calcul des sommets et creux pivots sur le graphique.
@@ -49,21 +49,21 @@ Vous pouvez modifier ces paramètres lors de l'attachement du robot sur votre gr
 
 ## 🚀 3. Procédure d'Installation Étape par Étape
 
-1. **Placer le fichier MQL5 :**
-   - Ouvrez MT5 $\rightarrow$ `Fichier` $\rightarrow$ `Ouvrir le dossier des données`.
-   - Allez dans `MQL5` $\rightarrow$ `Experts`.
-   - Copiez-y le fichier `ScalpingRobot.mq5`.
+### Pour MetaTrader 4 (MT4) :
+1. Ouvrez MT4 $\rightarrow$ `Fichier` $\rightarrow$ `Ouvrir le dossier des données`.
+2. Allez dans `MQL4` $\rightarrow$ `Experts`.
+3. Copiez-y le fichier `ScalpingRobot.mq4`.
+4. Relancez MT4 ou faites un clic droit sur "Experts" dans le Navigateur puis "Rafraîchir".
 
-2. **Autoriser la WebRequest pour Telegram :**
-   - Dans MT5 : `Outils` $\rightarrow$ `Options` $\rightarrow$ Onglet `Expert Advisors`.
-   - Cochez **"Autoriser WebRequest pour les URL listées"**.
-   - Ajoutez l'URL : `https://api.telegram.org`.
+### Pour MetaTrader 5 (MT5) :
+1. Ouvrez MT5 $\rightarrow$ `Fichier` $\rightarrow$ `Ouvrir le dossier des données`.
+2. Allez dans `MQL5` $\rightarrow$ `Experts`.
+3. Copiez-y le fichier `ScalpingRobot.mq5`.
 
-3. **Lancer le Robot sur l'Or :**
-   - Ouvrez un graphique **XAUUSD** sur l'unité de temps **M5**.
-   - Glissez-déposez `ScalpingRobot` depuis le Navigateur sur le graphique.
-   - Cochez **"Autoriser le Trading Algorithmique"** dans l'onglet Général.
-   - Configurez vos paramètres et validez avec **OK**.
+### Configuration Commune (Telegram & Trading) :
+- Dans MT4/MT5 : `Outils` $\rightarrow$ `Options` $\rightarrow$ Onglet `Expert Advisors`.
+- Cochez **"Autoriser WebRequest pour les URL listées"** et ajoutez : `https://api.telegram.org`.
+- Glissez-déposez l'EA sur un graphique **XAUUSD M5** et activez le Trading Algorithmique / AutoTrading.
 
 ---
 
@@ -74,7 +74,7 @@ Pilotez votre robot n'importe où depuis votre téléphone :
 - `/start` : Réactive le robot et autorise l'ouverture de nouveaux paniers.
 - `/stop` : Met l'EA en pause (aucun nouveau panier ne sera ouvert).
 - `/stats` : Reçoit un rapport complet en direct (Solde, Équité, Profit flottant du panier, Nombre de positions actives).
-- `/screen` : Reçoit une capture d'écran HD instantanée de votre graphique MT5.
+- `/screen` : Reçoit une capture d'écran HD instantanée de votre graphique MT4/MT5.
 
 ---
 
@@ -85,4 +85,4 @@ Pilotez votre robot n'importe où depuis votre téléphone :
 - **Événements Économiques Majeurs :** Lors des annonces à très fort impact (NFP, IPC/CPI, Décisions FED), vous pouvez mettre le robot en pause via `/stop` pour éviter la volatilité extrême.
 
 ---
-*GOAT Hedging & Recovery EA v4.0 – Conçu pour performer en toute sérénité.*
+*GOAT Hedging & Recovery EA v4.0 – Disponible sur MT4 & MT5.*

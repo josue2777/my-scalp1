@@ -1,6 +1,8 @@
-# GOAT Hedging & Recovery Robot v4.0 (XAUUSD M5)
+# GOAT Hedging & Recovery Robot v4.0 (XAUUSD M5) - MT4 & MT5
 
-Expert Advisor MQL5 haut de gamme conçu spécifiquement pour le trading de l'Or (**XAUUSD**) sur l'unité de temps **M5**, intégrant une stratégie de **Hedging & Recovery Zone** (Zone de Couverture et Récupération) avec clôture globale en profit de panier (Basket Profit).
+Expert Advisor haut de gamme conçu spécifiquement pour le trading de l'Or (**XAUUSD**) sur l'unité de temps **M5**, disponible pour **MetaTrader 4 (`ScalpingRobot.mq4`)** et **MetaTrader 5 (`ScalpingRobot.mq5`)**.
+
+Il intègre une stratégie de **Hedging & Recovery Zone** (Zone de Couverture et Récupération) avec clôture globale en profit de panier (Basket Profit).
 
 ---
 
@@ -13,6 +15,14 @@ Le robot exploite un signal de cassure basé sur les plus hauts et plus bas réc
    - Le robot **conserve la position initiale ouverte**.
    - Il ouvre immédiatement une position inverse (**Hedge Counter Trade**) avec un multiplicateur de lot (`HedgeLotMultiplier`).
 3. **Clôture Basket Profit :** Dès que le profit net accumulé de l'ensemble du panier (positions initiales + couvertures) atteint l'objectif `TargetBasketProfit` ($), **toutes les positions du panier sont fermées simultanément en profit net**.
+
+---
+
+## 📂 Fichiers du Projet
+
+- `ScalpingRobot.mq4` : Version Expert Advisor pour **MetaTrader 4**.
+- `ScalpingRobot.mq5` : Version Expert Advisor pour **MetaTrader 5**.
+- `MANUEL_UTILISATION.md` : Guide d'utilisation complet en français.
 
 ---
 
@@ -36,7 +46,7 @@ Envoyez ces commandes à votre robot Telegram pour le piloter en direct :
 - `/start` : Active l'ouverture de nouveaux paniers.
 - `/stop` : Met l'EA en pause.
 - `/stats` : Affiche le solde, l'équité, le profit flottant du panier et le nombre de positions actives.
-- `/screen` : Reçoit une capture d'écran HD du graphique MT5 directement sur votre téléphone.
+- `/screen` : Reçoit une capture d'écran HD du graphique MT4/MT5 directement sur votre téléphone.
 
 ---
 
