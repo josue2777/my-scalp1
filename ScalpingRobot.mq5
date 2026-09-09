@@ -17,10 +17,12 @@ input group "=== Strategy Parameters (XAUUSD M5) ==="
 input int    Swing_Length        = 12;      // Radius/Pivot window for Highs & Lows
 input double BaseLot             = 0.01;    // Initial trade lot size
 input double RiskPercent         = 1.0;     // Capital Risk % (auto lot if BaseLot=0)
+input int    InitialTradeCount   = 1;       // Number of initial positions to open simultaneously
 
 input group "=== Hedging & Recovery Zone ==="
 input int    HedgeDistancePts    = 300;     // Distance in points before opening counter Hedge (e.g. 300 pts = $3.00 XAUUSD)
 input double HedgeLotMultiplier  = 1.5;     // Multiplier for counter hedge lot size
+input int    HedgeTradeCount     = 1;       // Number of hedging positions to open simultaneously per trigger
 input int    MaxHedgeOrders      = 6;       // Maximum allowed hedging positions in basket
 input double TargetBasketProfit  = 5.0;     // Basket Profit Target in USD to close all trades
 input int    StopLossPts         = 1500;    // Emergency Stop Loss in points per position (0 to disable)
@@ -137,24 +139,36 @@ void CheckNewTradeSignals()
     double currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     double prevClose  = iClose(_Symbol, _Period, 1);
 
+    int countToOpen = MathMax(1, InitialTradeCount);
+
     // Breakout above pivot high -> Initial BUY
     if(prevClose > pivotHigh && pivotHigh > 0)
     {
-        double lot = GetTradeLotSize();
-        double sl  = (StopLossPts > 0) ? currentAsk - StopLossPts * _Point : 0;
-        if(trade.Buy(lot, _Symbol, currentAsk, sl, 0, "GOAT BUY"))
+        for(int k = 0; k < countToOpen; k++)
         {
-            SendTelegramMessage("📈 *GOAT BUY Opened*\nPrice: " + DoubleToString(currentAsk, _Digits) + "\nLot: " + DoubleToString(lot, 2));
+            if(GetTotalPos() >= MaxHedgeOrders) break;
+
+            double lot = GetTradeLotSize();
+            double sl  = (StopLossPts > 0) ? currentAsk - StopLossPts * _Point : 0;
+            if(trade.Buy(lot, _Symbol, currentAsk, sl, 0, "GOAT BUY"))
+            {
+                SendTelegramMessage("📈 *GOAT BUY Opened*\nPrice: " + DoubleToString(currentAsk, _Digits) + "\nLot: " + DoubleToString(lot, 2));
+            }
         }
     }
     // Breakout below pivot low -> Initial SELL
     else if(prevClose < pivotLow && pivotLow > 0)
     {
-        double lot = GetTradeLotSize();
-        double sl  = (StopLossPts > 0) ? currentBid + StopLossPts * _Point : 0;
-        if(trade.Sell(lot, _Symbol, currentBid, sl, 0, "GOAT SELL"))
+        for(int k = 0; k < countToOpen; k++)
         {
-            SendTelegramMessage("📉 *GOAT SELL Opened*\nPrice: " + DoubleToString(currentBid, _Digits) + "\nLot: " + DoubleToString(lot, 2));
+            if(GetTotalPos() >= MaxHedgeOrders) break;
+
+            double lot = GetTradeLotSize();
+            double sl  = (StopLossPts > 0) ? currentBid + StopLossPts * _Point : 0;
+            if(trade.Sell(lot, _Symbol, currentBid, sl, 0, "GOAT SELL"))
+            {
+                SendTelegramMessage("📉 *GOAT SELL Opened*\nPrice: " + DoubleToString(currentBid, _Digits) + "\nLot: " + DoubleToString(lot, 2));
+            }
         }
     }
 }
@@ -189,6 +203,8 @@ void ManageBasketAndHedging()
             double currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
             double currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
+            int hedgeToOpen = MathMax(1, HedgeTradeCount);
+
             // If initial/last position was BUY and market drops by HedgeDistancePts -> Open Counter SELL
             if(type == POSITION_TYPE_BUY)
             {
@@ -197,9 +213,14 @@ void ManageBasketAndHedging()
                     double hedgeLot = NormalizeDouble(lastLot * HedgeLotMultiplier, 2);
                     hedgeLot = MathMax(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), hedgeLot);
                     double sl = (StopLossPts > 0) ? currentBid + StopLossPts * _Point : 0;
-                    if(trade.Sell(hedgeLot, _Symbol, currentBid, sl, 0, "GOAT HEDGE SELL"))
+
+                    for(int k = 0; k < hedgeToOpen; k++)
                     {
-                        SendTelegramMessage("🛡️ *GOAT HEDGE SELL Triggered*\nPrice: " + DoubleToString(currentBid, _Digits) + "\nLot: " + DoubleToString(hedgeLot, 2));
+                        if(GetTotalPos() >= MaxHedgeOrders) break;
+                        if(trade.Sell(hedgeLot, _Symbol, currentBid, sl, 0, "GOAT HEDGE SELL"))
+                        {
+                            SendTelegramMessage("🛡️ *GOAT HEDGE SELL Triggered*\nPrice: " + DoubleToString(currentBid, _Digits) + "\nLot: " + DoubleToString(hedgeLot, 2));
+                        }
                     }
                 }
             }
@@ -211,9 +232,14 @@ void ManageBasketAndHedging()
                     double hedgeLot = NormalizeDouble(lastLot * HedgeLotMultiplier, 2);
                     hedgeLot = MathMax(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), hedgeLot);
                     double sl = (StopLossPts > 0) ? currentAsk - StopLossPts * _Point : 0;
-                    if(trade.Buy(hedgeLot, _Symbol, currentAsk, sl, 0, "GOAT HEDGE BUY"))
+
+                    for(int k = 0; k < hedgeToOpen; k++)
                     {
-                        SendTelegramMessage("🛡️ *GOAT HEDGE BUY Triggered*\nPrice: " + DoubleToString(currentAsk, _Digits) + "\nLot: " + DoubleToString(hedgeLot, 2));
+                        if(GetTotalPos() >= MaxHedgeOrders) break;
+                        if(trade.Buy(hedgeLot, _Symbol, currentAsk, sl, 0, "GOAT HEDGE BUY"))
+                        {
+                            SendTelegramMessage("🛡️ *GOAT HEDGE BUY Triggered*\nPrice: " + DoubleToString(currentAsk, _Digits) + "\nLot: " + DoubleToString(hedgeLot, 2));
+                        }
                     }
                 }
             }

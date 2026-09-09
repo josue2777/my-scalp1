@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, TradingBot Pro"
 #property link      ""
-#property version   "4.00"
+#property version   "4.10"
 #property strict
 
 #define MAGIC_NUMBER 77777
@@ -15,10 +15,12 @@ extern string _Strategy_      = "=== Strategy Parameters (XAUUSD M5) ===";
 extern int    Swing_Length     = 12;      // Radius/Pivot window for Highs & Lows
 extern double BaseLot          = 0.01;    // Initial trade lot size
 extern double RiskPercent      = 1.0;     // Capital Risk % (auto lot if BaseLot=0)
+extern int    InitialTradeCount = 1;      // Number of initial positions to open simultaneously
 
 extern string _Hedging_       = "=== Hedging & Recovery Zone ===";
 extern int    HedgeDistancePts = 300;     // Distance in points before opening counter Hedge (300 pts = $3.00 XAUUSD)
 extern double HedgeLotMultiplier = 1.5;   // Multiplier for counter hedge lot size
+extern int    HedgeTradeCount  = 1;       // Number of hedging positions to open simultaneously per trigger
 extern int    MaxHedgeOrders   = 6;       // Maximum allowed hedging positions in basket
 extern double TargetBasketProfit = 5.0;   // Basket Profit Target in USD to close all trades
 extern int    StopLossPts      = 1500;    // Emergency Stop Loss in points per position (0 to disable)
@@ -124,26 +126,38 @@ void CheckNewTradeSignals()
     double currentBid = Bid;
     double prevClose  = iClose(Symbol(), Period(), 1);
 
+    int countToOpen = MathMax(1, InitialTradeCount);
+
     // Breakout above pivot high -> Initial BUY
     if(prevClose > pivotHigh && pivotHigh > 0)
     {
-        double lot = GetTradeLotSize();
-        double sl  = (StopLossPts > 0) ? currentAsk - StopLossPts * Point : 0;
-        int ticket = OrderSend(Symbol(), OP_BUY, lot, currentAsk, 3, sl, 0, "GOAT BUY", MAGIC_NUMBER, 0, clrBlue);
-        if(ticket > 0)
+        for(int k = 0; k < countToOpen; k++)
         {
-            SendTelegramMessage("📈 *GOAT BUY Opened*\nPrice: " + DoubleToStr(currentAsk, Digits) + "\nLot: " + DoubleToStr(lot, 2));
+            if(GetTotalPos() >= MaxHedgeOrders) break;
+
+            double lot = GetTradeLotSize();
+            double sl  = (StopLossPts > 0) ? currentAsk - StopLossPts * Point : 0;
+            int ticket = OrderSend(Symbol(), OP_BUY, lot, currentAsk, 3, sl, 0, "GOAT BUY", MAGIC_NUMBER, 0, clrBlue);
+            if(ticket > 0)
+            {
+                SendTelegramMessage("📈 *GOAT BUY Opened*\nPrice: " + DoubleToStr(currentAsk, Digits) + "\nLot: " + DoubleToStr(lot, 2));
+            }
         }
     }
     // Breakout below pivot low -> Initial SELL
     else if(prevClose < pivotLow && pivotLow > 0)
     {
-        double lot = GetTradeLotSize();
-        double sl  = (StopLossPts > 0) ? currentBid + StopLossPts * Point : 0;
-        int ticket = OrderSend(Symbol(), OP_SELL, lot, currentBid, 3, sl, 0, "GOAT SELL", MAGIC_NUMBER, 0, clrRed);
-        if(ticket > 0)
+        for(int k = 0; k < countToOpen; k++)
         {
-            SendTelegramMessage("📉 *GOAT SELL Opened*\nPrice: " + DoubleToStr(currentBid, Digits) + "\nLot: " + DoubleToStr(lot, 2));
+            if(GetTotalPos() >= MaxHedgeOrders) break;
+
+            double lot = GetTradeLotSize();
+            double sl  = (StopLossPts > 0) ? currentBid + StopLossPts * Point : 0;
+            int ticket = OrderSend(Symbol(), OP_SELL, lot, currentBid, 3, sl, 0, "GOAT SELL", MAGIC_NUMBER, 0, clrRed);
+            if(ticket > 0)
+            {
+                SendTelegramMessage("📉 *GOAT SELL Opened*\nPrice: " + DoubleToStr(currentBid, Digits) + "\nLot: " + DoubleToStr(lot, 2));
+            }
         }
     }
 }
@@ -178,6 +192,8 @@ void ManageBasketAndHedging()
             double currentAsk = Ask;
             double currentBid = Bid;
 
+            int hedgeToOpen = MathMax(1, HedgeTradeCount);
+
             // If initial/last position was BUY and market drops by HedgeDistancePts -> Open Counter SELL
             if(type == OP_BUY)
             {
@@ -186,10 +202,15 @@ void ManageBasketAndHedging()
                     double hedgeLot = NormalizeDouble(lastLot * HedgeLotMultiplier, 2);
                     hedgeLot = MathMax(MarketInfo(Symbol(), MODE_MINLOT), hedgeLot);
                     double sl = (StopLossPts > 0) ? currentBid + StopLossPts * Point : 0;
-                    int ticket = OrderSend(Symbol(), OP_SELL, hedgeLot, currentBid, 3, sl, 0, "GOAT HEDGE SELL", MAGIC_NUMBER, 0, clrRed);
-                    if(ticket > 0)
+
+                    for(int k = 0; k < hedgeToOpen; k++)
                     {
-                        SendTelegramMessage("🛡️ *GOAT HEDGE SELL Triggered*\nPrice: " + DoubleToStr(currentBid, Digits) + "\nLot: " + DoubleToStr(hedgeLot, 2));
+                        if(GetTotalPos() >= MaxHedgeOrders) break;
+                        int ticket = OrderSend(Symbol(), OP_SELL, hedgeLot, currentBid, 3, sl, 0, "GOAT HEDGE SELL", MAGIC_NUMBER, 0, clrRed);
+                        if(ticket > 0)
+                        {
+                            SendTelegramMessage("🛡️ *GOAT HEDGE SELL Triggered*\nPrice: " + DoubleToStr(currentBid, Digits) + "\nLot: " + DoubleToStr(hedgeLot, 2));
+                        }
                     }
                 }
             }
@@ -200,11 +221,16 @@ void ManageBasketAndHedging()
                 {
                     double hedgeLot = NormalizeDouble(lastLot * HedgeLotMultiplier, 2);
                     hedgeLot = MathMax(MarketInfo(Symbol(), MODE_MINLOT), hedgeLot);
-                    double sl = (StopLossPts > 0) ? currentAsk - StopLossPts * Point : 0;
-                    int ticket = OrderSend(Symbol(), OP_BUY, hedgeLot, currentAsk, 3, sl, 0, "GOAT HEDGE BUY", MAGIC_NUMBER, 0, clrBlue);
-                    if(ticket > 0)
+                    double sl = (StopLossPts > 0) ? currentAsk + StopLossPts * Point : 0;
+
+                    for(int k = 0; k < hedgeToOpen; k++)
                     {
-                        SendTelegramMessage("🛡️ *GOAT HEDGE BUY Triggered*\nPrice: " + DoubleToStr(currentAsk, Digits) + "\nLot: " + DoubleToStr(hedgeLot, 2));
+                        if(GetTotalPos() >= MaxHedgeOrders) break;
+                        int ticket = OrderSend(Symbol(), OP_BUY, hedgeLot, currentAsk, 3, sl, 0, "GOAT HEDGE BUY", MAGIC_NUMBER, 0, clrBlue);
+                        if(ticket > 0)
+                        {
+                            SendTelegramMessage("🛡️ *GOAT HEDGE BUY Triggered*\nPrice: " + DoubleToStr(currentAsk, Digits) + "\nLot: " + DoubleToStr(hedgeLot, 2));
+                        }
                     }
                 }
             }
