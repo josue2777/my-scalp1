@@ -1,51 +1,47 @@
 //+------------------------------------------------------------------+
-//|                                           ScalpingRobot.mq5      |
+//|                                           ScalpingRobot.mq4      |
 //|                       GOAT Hedging & Recovery Zone EA (XAUUSD M5)|
 //|                                  Copyright 2026, TradingBot Pro  |
 //+------------------------------------------------------------------+
-#include <Trade/Trade.mqh>
-#include <Trade/PositionInfo.mqh>
-#include <Trade/OrderInfo.mqh>
-
-CTrade trade;
-CPositionInfo pos;
-COrderInfo ord;
+#property copyright "Copyright 2026, TradingBot Pro"
+#property link      ""
+#property version   "4.10"
+#property strict
 
 #define MAGIC_NUMBER 77777
 
-input group "=== Strategy Parameters (XAUUSD M5) ==="
-input int    Swing_Length        = 12;      // Radius/Pivot window for Highs & Lows
-input double BaseLot             = 0.01;    // Initial trade lot size
-input double RiskPercent         = 1.0;     // Capital Risk % (auto lot if BaseLot=0)
-input int    InitialTradeCount   = 1;       // Number of initial positions to open simultaneously
+// Input Parameters
+extern string _Strategy_      = "=== Strategy Parameters (XAUUSD M5) ===";
+extern int    Swing_Length     = 12;      // Radius/Pivot window for Highs & Lows
+extern double BaseLot          = 0.01;    // Initial trade lot size
+extern double RiskPercent      = 1.0;     // Capital Risk % (auto lot if BaseLot=0)
+extern int    InitialTradeCount = 1;      // Number of initial positions to open simultaneously
 
-input group "=== Hedging & Recovery Zone ==="
-input int    HedgeDistancePts    = 300;     // Distance in points before opening counter Hedge (e.g. 300 pts = $3.00 XAUUSD)
-input double HedgeLotMultiplier  = 1.5;     // Multiplier for counter hedge lot size
-input int    HedgeTradeCount     = 1;       // Number of hedging positions to open simultaneously per trigger
-input int    MaxHedgeOrders      = 6;       // Maximum allowed hedging positions in basket
-input double TargetBasketProfit  = 5.0;     // Basket Profit Target in USD to close all trades
-input int    StopLossPts         = 1500;    // Emergency Stop Loss in points per position (0 to disable)
+extern string _Hedging_       = "=== Hedging & Recovery Zone ===";
+extern int    HedgeDistancePts = 300;     // Distance in points before opening counter Hedge (300 pts = $3.00 XAUUSD)
+extern double HedgeLotMultiplier = 1.5;   // Multiplier for counter hedge lot size
+extern int    HedgeTradeCount  = 1;       // Number of hedging positions to open simultaneously per trigger
+extern int    MaxHedgeOrders   = 6;       // Maximum allowed hedging positions in basket
+extern double TargetBasketProfit = 5.0;   // Basket Profit Target in USD to close all trades
+extern int    StopLossPts      = 1500;    // Emergency Stop Loss in points per position (0 to disable)
 
-input group "=== Telegram Controls ==="
-input string TelegramToken       = "";      // Telegram Bot Token (e.g. 123456:ABC...)
-input string TelegramChatID      = "";      // Telegram Chat ID
+extern string _Telegram_      = "=== Telegram Controls ===";
+extern string TelegramToken    = "";      // Telegram Bot Token (e.g. 123456:ABC...)
+extern string TelegramChatID   = "";      // Telegram Chat ID
 
-input group "=== Interface & Display ==="
-input color  DashboardColor      = clrDarkSlateGray;
-input int    DashboardX          = 20;
-input int    DashboardY          = 80;
-input int    BullX               = 320;
-input int    BullY               = 80;
-input string Expiration          = "2026.12.31";
+extern string _Visuals_       = "=== Interface & Display ===";
+extern color  DashboardColor   = clrDarkSlateGray;
+extern int    DashboardX       = 20;
+extern int    DashboardY       = 80;
+extern int    BullX            = 320;
+extern int    BullY            = 80;
+extern string Expiration       = "2026.12.31";
 
 // Global Variables
-int      handle_atr;
 double   InitialBalance;
 bool     BotEnabled = true;
 long     LastUpdateID = 0;
 
-// Dynamic High/Low variables
 double   pivotHigh = 0.0;
 double   pivotLow  = 0.0;
 
@@ -54,21 +50,12 @@ double   pivotLow  = 0.0;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    trade.SetExpertMagicNumber(MAGIC_NUMBER);
-    handle_atr = iATR(_Symbol, _Period, 14);
-
-    if(handle_atr == INVALID_HANDLE)
-    {
-        Print("Failed to create ATR indicator handle");
-        return INIT_FAILED;
-    }
-
-    InitialBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+    InitialBalance = AccountBalance();
 
     CreateDashboard();
     EventSetTimer(1);
 
-    SendTelegramMessage("🚀 *GOAT Hedging & Recovery EA Initialized*\nSymbol: " + _Symbol + "\nTimeframe: M5\nStatus: Active");
+    SendTelegramMessage("🚀 *GOAT Hedging & Recovery EA Initialized (MT4)*\nSymbol: " + Symbol() + "\nTimeframe: M5\nStatus: Active");
     return(INIT_SUCCEEDED);
 }
 
@@ -88,7 +75,7 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-    if(!BotEnabled || TimeCurrent() > StringToTime(Expiration))
+    if(!BotEnabled || TimeCurrent() > StrToTime(Expiration))
     {
         UpdateDashboard();
         return;
@@ -112,37 +99,18 @@ void OnTick()
 //+------------------------------------------------------------------+
 //| Pivot Points & S&D Zone Calculation                              |
 //+------------------------------------------------------------------+
-int GetHighestBar(string symbol, ENUM_TIMEFRAMES tf, int count, int start)
-{
-    double high[];
-    ArraySetAsSeries(high, true);
-    if(CopyHigh(symbol, tf, start, count, high) <= 0) return -1;
-    int idx = ArrayMaximum(high, 0, count);
-    return (idx >= 0) ? start + idx : -1;
-}
-
-int GetLowestBar(string symbol, ENUM_TIMEFRAMES tf, int count, int start)
-{
-    double low[];
-    ArraySetAsSeries(low, true);
-    if(CopyLow(symbol, tf, start, count, low) <= 0) return -1;
-    int idx = ArrayMinimum(low, 0, count);
-    return (idx >= 0) ? start + idx : -1;
-}
-
 void CalculatePivots()
 {
     int totalBars = Swing_Length * 2 + 1;
-    // Search starting at bar 2 so bar 1 can break out above/below the pivot range
-    int hi_idx = GetHighestBar(_Symbol, _Period, totalBars, 2);
-    int lo_idx = GetLowestBar(_Symbol, _Period, totalBars, 2);
+    int hi_idx = iHighest(Symbol(), Period(), MODE_HIGH, totalBars, 2);
+    int lo_idx = iLowest(Symbol(), Period(), MODE_LOW, totalBars, 2);
 
     if(hi_idx >= 0 && lo_idx >= 0)
     {
-        pivotHigh = iHigh(_Symbol, _Period, hi_idx);
-        pivotLow  = iLow(_Symbol, _Period, lo_idx);
+        pivotHigh = iHigh(Symbol(), Period(), hi_idx);
+        pivotLow  = iLow(Symbol(), Period(), lo_idx);
 
-        double atrVal = GetATR();
+        double atrVal = iATR(Symbol(), Period(), 14, 0);
         DrawZone("ZONE_SUPPLY", pivotHigh, pivotHigh - (atrVal * 0.3), clrIndianRed);
         DrawZone("ZONE_DEMAND", pivotLow + (atrVal * 0.3), pivotLow, clrSeaGreen);
     }
@@ -153,9 +121,9 @@ void CalculatePivots()
 //+------------------------------------------------------------------+
 void CheckNewTradeSignals()
 {
-    double currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    double currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    double prevClose  = iClose(_Symbol, _Period, 1);
+    double currentAsk = Ask;
+    double currentBid = Bid;
+    double prevClose  = iClose(Symbol(), Period(), 1);
 
     int countToOpen = MathMax(1, InitialTradeCount);
 
@@ -167,10 +135,11 @@ void CheckNewTradeSignals()
             if(GetTotalPos() >= MaxHedgeOrders) break;
 
             double lot = GetTradeLotSize();
-            double sl  = (StopLossPts > 0) ? currentAsk - StopLossPts * _Point : 0;
-            if(trade.Buy(lot, _Symbol, currentAsk, sl, 0, "GOAT BUY"))
+            double sl  = (StopLossPts > 0) ? currentAsk - StopLossPts * Point : 0;
+            int ticket = OrderSend(Symbol(), OP_BUY, lot, currentAsk, 3, sl, 0, "GOAT BUY", MAGIC_NUMBER, 0, clrBlue);
+            if(ticket > 0)
             {
-                SendTelegramMessage("📈 *GOAT BUY Opened*\nPrice: " + DoubleToString(currentAsk, _Digits) + "\nLot: " + DoubleToString(lot, 2));
+                SendTelegramMessage("📈 *GOAT BUY Opened*\nPrice: " + DoubleToStr(currentAsk, Digits) + "\nLot: " + DoubleToStr(lot, 2));
             }
         }
     }
@@ -182,10 +151,11 @@ void CheckNewTradeSignals()
             if(GetTotalPos() >= MaxHedgeOrders) break;
 
             double lot = GetTradeLotSize();
-            double sl  = (StopLossPts > 0) ? currentBid + StopLossPts * _Point : 0;
-            if(trade.Sell(lot, _Symbol, currentBid, sl, 0, "GOAT SELL"))
+            double sl  = (StopLossPts > 0) ? currentBid + StopLossPts * Point : 0;
+            int ticket = OrderSend(Symbol(), OP_SELL, lot, currentBid, 3, sl, 0, "GOAT SELL", MAGIC_NUMBER, 0, clrRed);
+            if(ticket > 0)
             {
-                SendTelegramMessage("📉 *GOAT SELL Opened*\nPrice: " + DoubleToString(currentBid, _Digits) + "\nLot: " + DoubleToString(lot, 2));
+                SendTelegramMessage("📉 *GOAT SELL Opened*\nPrice: " + DoubleToStr(currentBid, Digits) + "\nLot: " + DoubleToStr(lot, 2));
             }
         }
     }
@@ -205,58 +175,60 @@ void ManageBasketAndHedging()
     if(totalFloatingProfit >= TargetBasketProfit)
     {
         CloseAllBasketPositions();
-        SendTelegramMessage("🎉 *Basket Profit Target Reached!*\nClosed Net Profit: $" + DoubleToString(totalFloatingProfit, 2));
+        SendTelegramMessage("🎉 *Basket Profit Target Reached!*\nClosed Net Profit: $" + DoubleToStr(totalFloatingProfit, 2));
         return;
     }
 
     // Check Hedging Trigger Condition if positions exist
     if(totalPos < MaxHedgeOrders)
     {
-        ulong lastTicket = GetLastPositionTicket();
-        if(lastTicket > 0 && pos.SelectByTicket(lastTicket))
+        int lastTicket = GetLastPositionTicket();
+        if(lastTicket > 0 && OrderSelect(lastTicket, SELECT_BY_TICKET))
         {
-            ENUM_POSITION_TYPE type = pos.PositionType();
-            double openPrice = pos.PriceOpen();
-            double lastLot = pos.Volume();
-            double currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-            double currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+            int type          = OrderType();
+            double openPrice  = OrderOpenPrice();
+            double lastLot    = OrderLots();
+            double currentAsk = Ask;
+            double currentBid = Bid;
 
             int hedgeToOpen = MathMax(1, HedgeTradeCount);
 
             // If initial/last position was BUY and market drops by HedgeDistancePts -> Open Counter SELL
-            if(type == POSITION_TYPE_BUY)
+            if(type == OP_BUY)
             {
-                if(openPrice - currentBid >= HedgeDistancePts * _Point)
+                if(openPrice - currentBid >= HedgeDistancePts * Point)
                 {
                     double hedgeLot = NormalizeDouble(lastLot * HedgeLotMultiplier, 2);
-                    hedgeLot = MathMax(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), hedgeLot);
-                    double sl = (StopLossPts > 0) ? currentBid + StopLossPts * _Point : 0;
+                    hedgeLot = MathMax(MarketInfo(Symbol(), MODE_MINLOT), hedgeLot);
+                    double sl = (StopLossPts > 0) ? currentBid + StopLossPts * Point : 0;
 
                     for(int k = 0; k < hedgeToOpen; k++)
                     {
                         if(GetTotalPos() >= MaxHedgeOrders) break;
-                        if(trade.Sell(hedgeLot, _Symbol, currentBid, sl, 0, "GOAT HEDGE SELL"))
+                        int ticket = OrderSend(Symbol(), OP_SELL, hedgeLot, currentBid, 3, sl, 0, "GOAT HEDGE SELL", MAGIC_NUMBER, 0, clrRed);
+                        if(ticket > 0)
                         {
-                            SendTelegramMessage("🛡️ *GOAT HEDGE SELL Triggered*\nPrice: " + DoubleToString(currentBid, _Digits) + "\nLot: " + DoubleToString(hedgeLot, 2));
+                            SendTelegramMessage("🛡️ *GOAT HEDGE SELL Triggered*\nPrice: " + DoubleToStr(currentBid, Digits) + "\nLot: " + DoubleToStr(hedgeLot, 2));
                         }
                     }
                 }
             }
             // If initial/last position was SELL and market rises by HedgeDistancePts -> Open Counter BUY
-            else if(type == POSITION_TYPE_SELL)
+            else if(type == OP_SELL)
             {
-                if(currentAsk - openPrice >= HedgeDistancePts * _Point)
+                if(currentAsk - openPrice >= HedgeDistancePts * Point)
                 {
                     double hedgeLot = NormalizeDouble(lastLot * HedgeLotMultiplier, 2);
-                    hedgeLot = MathMax(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), hedgeLot);
-                    double sl = (StopLossPts > 0) ? currentAsk - StopLossPts * _Point : 0;
+                    hedgeLot = MathMax(MarketInfo(Symbol(), MODE_MINLOT), hedgeLot);
+                    double sl = (StopLossPts > 0) ? currentAsk + StopLossPts * Point : 0;
 
                     for(int k = 0; k < hedgeToOpen; k++)
                     {
                         if(GetTotalPos() >= MaxHedgeOrders) break;
-                        if(trade.Buy(hedgeLot, _Symbol, currentAsk, sl, 0, "GOAT HEDGE BUY"))
+                        int ticket = OrderSend(Symbol(), OP_BUY, hedgeLot, currentAsk, 3, sl, 0, "GOAT HEDGE BUY", MAGIC_NUMBER, 0, clrBlue);
+                        if(ticket > 0)
                         {
-                            SendTelegramMessage("🛡️ *GOAT HEDGE BUY Triggered*\nPrice: " + DoubleToString(currentAsk, _Digits) + "\nLot: " + DoubleToString(hedgeLot, 2));
+                            SendTelegramMessage("🛡️ *GOAT HEDGE BUY Triggered*\nPrice: " + DoubleToStr(currentAsk, Digits) + "\nLot: " + DoubleToStr(hedgeLot, 2));
                         }
                     }
                 }
@@ -270,11 +242,17 @@ void ManageBasketAndHedging()
 //+------------------------------------------------------------------+
 void CloseAllBasketPositions()
 {
-    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    for(int i = OrdersTotal() - 1; i >= 0; i--)
     {
-        if(pos.SelectByIndex(i) && pos.Magic() == MAGIC_NUMBER && pos.Symbol() == _Symbol)
+        if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-            trade.PositionClose(pos.Ticket());
+            if(OrderMagicNumber() == MAGIC_NUMBER && OrderSymbol() == Symbol())
+            {
+                if(OrderType() == OP_BUY)
+                    OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrWhite);
+                else if(OrderType() == OP_SELL)
+                    OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrWhite);
+            }
         }
     }
 }
@@ -285,11 +263,14 @@ void CloseAllBasketPositions()
 double GetBasketFloatingProfit()
 {
     double totalProfit = 0.0;
-    for(int i = 0; i < PositionsTotal(); i++)
+    for(int i = 0; i < OrdersTotal(); i++)
     {
-        if(pos.SelectByIndex(i) && pos.Magic() == MAGIC_NUMBER && pos.Symbol() == _Symbol)
+        if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-            totalProfit += pos.Profit() + pos.Swap() + pos.Commission();
+            if(OrderMagicNumber() == MAGIC_NUMBER && OrderSymbol() == Symbol())
+            {
+                totalProfit += OrderProfit() + OrderSwap() + OrderCommission();
+            }
         }
     }
     return totalProfit;
@@ -298,26 +279,32 @@ double GetBasketFloatingProfit()
 int GetTotalPos()
 {
     int count = 0;
-    for(int i = 0; i < PositionsTotal(); i++)
+    for(int i = 0; i < OrdersTotal(); i++)
     {
-        if(pos.SelectByIndex(i) && pos.Magic() == MAGIC_NUMBER && pos.Symbol() == _Symbol)
-            count++;
+        if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+        {
+            if(OrderMagicNumber() == MAGIC_NUMBER && OrderSymbol() == Symbol())
+                count++;
+        }
     }
     return count;
 }
 
-ulong GetLastPositionTicket()
+int GetLastPositionTicket()
 {
-    ulong lastTicket = 0;
+    int lastTicket = 0;
     datetime latestTime = 0;
-    for(int i = 0; i < PositionsTotal(); i++)
+    for(int i = 0; i < OrdersTotal(); i++)
     {
-        if(pos.SelectByIndex(i) && pos.Magic() == MAGIC_NUMBER && pos.Symbol() == _Symbol)
+        if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-            if(pos.Time() >= latestTime)
+            if(OrderMagicNumber() == MAGIC_NUMBER && OrderSymbol() == Symbol())
             {
-                latestTime = pos.Time();
-                lastTicket = pos.Ticket();
+                if(OrderOpenTime() >= latestTime)
+                {
+                    latestTime = OrderOpenTime();
+                    lastTicket = OrderTicket();
+                }
             }
         }
     }
@@ -328,28 +315,21 @@ double GetTradeLotSize()
 {
     if(BaseLot > 0) return BaseLot;
 
-    double riskAmount = AccountInfoDouble(ACCOUNT_BALANCE) * (RiskPercent / 100.0);
-    double tickVal    = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double riskAmount = AccountBalance() * (RiskPercent / 100.0);
+    double tickVal    = MarketInfo(Symbol(), MODE_TICKVALUE);
     double distPts    = (HedgeDistancePts > 0) ? HedgeDistancePts : 500;
     double lot        = riskAmount / (distPts * tickVal);
 
     lot = NormalizeDouble(lot, 2);
-    double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-    double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    double minLot = MarketInfo(Symbol(), MODE_MINLOT);
+    double maxLot = MarketInfo(Symbol(), MODE_MAXLOT);
     return MathMax(minLot, MathMin(lot, maxLot));
-}
-
-double GetATR()
-{
-    double b[];
-    if(CopyBuffer(handle_atr, 0, 0, 1, b) > 0) return b[0];
-    return 1.0;
 }
 
 bool IsNewBar()
 {
     static datetime lastBarTime = 0;
-    datetime currentBarTime = iTime(_Symbol, _Period, 0);
+    datetime currentBarTime = iTime(Symbol(), Period(), 0);
     if(currentBarTime != lastBarTime)
     {
         lastBarTime = currentBarTime;
@@ -404,26 +384,26 @@ void PollTelegram()
         if(p >= 0)
         {
             int end = StringFind(resp, ",", p);
-            LastUpdateID = StringToInteger(StringSubstr(resp, p + 12, end - (p + 12)));
+            LastUpdateID = StrToInteger(StringSubstr(resp, p + 12, end - (p + 12)));
         }
     }
 }
 
 void SendStats()
 {
-    string msg = "📊 *GOAT HEDGING EA REPORT*\n";
-    msg += "Account Balance: $" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + "\n";
-    msg += "Account Equity: $" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + "\n";
-    msg += "Basket Floating Profit: $" + DoubleToString(GetBasketFloatingProfit(), 2) + "\n";
+    string msg = "📊 *GOAT HEDGING EA REPORT (MT4)*\n";
+    msg += "Account Balance: $" + DoubleToStr(AccountBalance(), 2) + "\n";
+    msg += "Account Equity: $" + DoubleToStr(AccountEquity(), 2) + "\n";
+    msg += "Basket Floating Profit: $" + DoubleToStr(GetBasketFloatingProfit(), 2) + "\n";
     msg += "Active Trades: " + IntegerToString(GetTotalPos()) + " / " + IntegerToString(MaxHedgeOrders) + "\n";
-    msg += "Target Basket Profit: $" + DoubleToString(TargetBasketProfit, 2);
+    msg += "Target Basket Profit: $" + DoubleToStr(TargetBasketProfit, 2);
     SendTelegramMessage(msg);
 }
 
 void SendScreen()
 {
     string fileName = "GOAT_Screen.gif";
-    if(ChartScreenShot(0, fileName, 1200, 800, ALIGN_RIGHT))
+    if(WindowScreenShot(fileName, 1200, 800))
     {
         SendTelegramPhoto(fileName);
     }
@@ -432,7 +412,7 @@ void SendScreen()
 void SendTelegramPhoto(string file)
 {
     string url = "https://api.telegram.org/bot" + TelegramToken + "/sendPhoto";
-    uchar photoData[];
+    char photoData[];
     int fileHandle = FileOpen(file, FILE_READ | FILE_BIN);
 
     if(fileHandle != INVALID_HANDLE)
@@ -445,16 +425,23 @@ void SendTelegramPhoto(string file)
                       "--" + boundary + "\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"" + file + "\"\r\nContent-Type: image/gif\r\n\r\n";
         string tail = "\r\n--" + boundary + "--\r\n";
 
-        uchar headArr[], tailArr[], payload[];
+        char headArr[], tailArr[], payload[];
         StringToCharArray(head, headArr, 0, WHOLE_ARRAY, CP_UTF8);
         StringToCharArray(tail, tailArr, 0, WHOLE_ARRAY, CP_UTF8);
 
-        int totalSize = ArraySize(headArr) + ArraySize(photoData) + ArraySize(tailArr) - 2;
+        int headLen = ArraySize(headArr) - 1;
+        int photoLen = ArraySize(photoData);
+        int tailLen = ArraySize(tailArr) - 1;
+
+        if(headLen < 0) headLen = 0;
+        if(tailLen < 0) tailLen = 0;
+
+        int totalSize = headLen + photoLen + tailLen;
         ArrayResize(payload, totalSize);
 
-        ArrayCopy(payload, headArr, 0, 0, ArraySize(headArr) - 1);
-        ArrayCopy(payload, photoData, ArraySize(headArr) - 1, 0, ArraySize(photoData));
-        ArrayCopy(payload, tailArr, ArraySize(headArr) - 1 + ArraySize(photoData), 0, ArraySize(tailArr) - 1);
+        if(headLen > 0) ArrayCopy(payload, headArr, 0, 0, headLen);
+        if(photoLen > 0) ArrayCopy(payload, photoData, headLen, 0, photoLen);
+        if(tailLen > 0) ArrayCopy(payload, tailArr, headLen + photoLen, 0, tailLen);
 
         string headers = "Content-Type: multipart/form-data; boundary=" + boundary + "\r\n";
         char resultData[];
@@ -472,7 +459,8 @@ void SendTelegramMessage(string text)
     char body[], resp[];
     string respHeaders;
 
-    ArrayResize(body, StringToCharArray(payload, body, 0, WHOLE_ARRAY, CP_UTF8) - 1);
+    int len = StringToCharArray(payload, body, 0, WHOLE_ARRAY, CP_UTF8);
+    if(len > 1) ArrayResize(body, len - 1);
     WebRequest("POST", url, NULL, NULL, 5000, body, ArraySize(body), resp, respHeaders);
 }
 
@@ -483,7 +471,7 @@ void CreateDashboard()
 {
     DrawRect("DASH_BG", DashboardX, DashboardY, 260, 210, DashboardColor);
     DrawRect("DASH_HDR", DashboardX, DashboardY, 260, 32, clrBlack);
-    DrawLabel("DASH_TITLE", DashboardX + 35, DashboardY + 8, "GOAT HEDGING RECOVERY", 10, clrGold, "Impact");
+    DrawLabel("DASH_TITLE", DashboardX + 35, DashboardY + 8, "GOAT HEDGING (MT4)", 10, clrGold, "Impact");
 }
 
 void UpdateDashboard()
@@ -491,12 +479,12 @@ void UpdateDashboard()
     double floatProfit = GetBasketFloatingProfit();
     color profitCol = (floatProfit >= 0) ? clrLime : clrLightCoral;
 
-    DrawLabel("DASH_BAL", DashboardX + 15, DashboardY + 45, "Balance: $" + DoubleToStr(AccountInfoDouble(ACCOUNT_BALANCE), 2), 9, clrWhite);
-    DrawLabel("DASH_EQ",  DashboardX + 15, DashboardY + 70, "Equity:  $" + DoubleToStr(AccountInfoDouble(ACCOUNT_EQUITY), 2), 9, clrWhite);
+    DrawLabel("DASH_BAL", DashboardX + 15, DashboardY + 45, "Balance: $" + DoubleToStr(AccountBalance(), 2), 9, clrWhite);
+    DrawLabel("DASH_EQ",  DashboardX + 15, DashboardY + 70, "Equity:  $" + DoubleToStr(AccountEquity(), 2), 9, clrWhite);
     DrawLabel("DASH_PRF", DashboardX + 15, DashboardY + 95, "Basket Profit: $" + DoubleToStr(floatProfit, 2), 9, profitCol, "Arial Bold");
     DrawLabel("DASH_TGT", DashboardX + 15, DashboardY + 120, "Basket Target: $" + DoubleToStr(TargetBasketProfit, 2), 9, clrGold);
     DrawLabel("DASH_ACT", DashboardX + 15, DashboardY + 145, "Hedge Orders: " + IntegerToString(GetTotalPos()) + " / " + IntegerToString(MaxHedgeOrders), 9, clrWhite);
-    DrawLabel("DASH_ST",  DashboardX + 15, DashboardY + 170, "EA Status: " + (BotEnabled ? "RUNNING (M5)" : "PAUSED"), 9, (BotEnabled ? clrCyan : clrTomato));
+    DrawLabel("DASH_ST",  DashboardX + 15, DashboardY + 170, "EA Status: " + (BotEnabled ? "RUNNING (M5 MT4)" : "PAUSED"), 9, (BotEnabled ? clrCyan : clrTomato));
 }
 
 void AnimateBull()
@@ -552,16 +540,16 @@ void DrawZone(string name, double topPrice, double bottomPrice, color bgCol)
 {
     if(ObjectFind(0, name) < 0)
     {
-        ObjectCreate(0, name, OBJ_RECTANGLE, 0, iTime(_Symbol, _Period, Swing_Length), topPrice, iTime(_Symbol, _Period, 0), bottomPrice);
+        ObjectCreate(0, name, OBJ_RECTANGLE, 0, iTime(Symbol(), Period(), Swing_Length), topPrice, iTime(Symbol(), Period(), 0), bottomPrice);
         ObjectSetInteger(0, name, OBJPROP_COLOR, bgCol);
         ObjectSetInteger(0, name, OBJPROP_FILL, true);
         ObjectSetInteger(0, name, OBJPROP_BACK, true);
     }
     else
     {
-        ObjectSetInteger(0, name, OBJPROP_TIME, 0, iTime(_Symbol, _Period, Swing_Length));
-        ObjectSetDouble(0, name, OBJPROP_PRICE, 0, topPrice);
-        ObjectSetInteger(0, name, OBJPROP_TIME, 1, iTime(_Symbol, _Period, 0));
-        ObjectSetDouble(0, name, OBJPROP_PRICE, 1, bottomPrice);
+        ObjectSetInteger(0, name, OBJPROP_TIME1, iTime(Symbol(), Period(), Swing_Length));
+        ObjectSetDouble(0, name, OBJPROP_PRICE1, topPrice);
+        ObjectSetInteger(0, name, OBJPROP_TIME2, iTime(Symbol(), Period(), 0));
+        ObjectSetDouble(0, name, OBJPROP_PRICE2, bottomPrice);
     }
 }
