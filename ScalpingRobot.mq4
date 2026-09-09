@@ -38,7 +38,6 @@ extern int    BullY            = 80;
 extern string Expiration       = "2026.12.31";
 
 // Global Variables
-int      handle_atr;
 double   InitialBalance;
 bool     BotEnabled = true;
 long     LastUpdateID = 0;
@@ -413,7 +412,7 @@ void SendScreen()
 void SendTelegramPhoto(string file)
 {
     string url = "https://api.telegram.org/bot" + TelegramToken + "/sendPhoto";
-    uchar photoData[];
+    char photoData[];
     int fileHandle = FileOpen(file, FILE_READ | FILE_BIN);
 
     if(fileHandle != INVALID_HANDLE)
@@ -426,16 +425,23 @@ void SendTelegramPhoto(string file)
                       "--" + boundary + "\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"" + file + "\"\r\nContent-Type: image/gif\r\n\r\n";
         string tail = "\r\n--" + boundary + "--\r\n";
 
-        uchar headArr[], tailArr[], payload[];
+        char headArr[], tailArr[], payload[];
         StringToCharArray(head, headArr, 0, WHOLE_ARRAY, CP_UTF8);
         StringToCharArray(tail, tailArr, 0, WHOLE_ARRAY, CP_UTF8);
 
-        int totalSize = ArraySize(headArr) + ArraySize(photoData) + ArraySize(tailArr) - 2;
+        int headLen = ArraySize(headArr) - 1;
+        int photoLen = ArraySize(photoData);
+        int tailLen = ArraySize(tailArr) - 1;
+
+        if(headLen < 0) headLen = 0;
+        if(tailLen < 0) tailLen = 0;
+
+        int totalSize = headLen + photoLen + tailLen;
         ArrayResize(payload, totalSize);
 
-        ArrayCopy(payload, headArr, 0, 0, ArraySize(headArr) - 1);
-        ArrayCopy(payload, photoData, ArraySize(headArr) - 1, 0, ArraySize(photoData));
-        ArrayCopy(payload, tailArr, ArraySize(headArr) - 1 + ArraySize(photoData), 0, ArraySize(tailArr) - 1);
+        if(headLen > 0) ArrayCopy(payload, headArr, 0, 0, headLen);
+        if(photoLen > 0) ArrayCopy(payload, photoData, headLen, 0, photoLen);
+        if(tailLen > 0) ArrayCopy(payload, tailArr, headLen + photoLen, 0, tailLen);
 
         string headers = "Content-Type: multipart/form-data; boundary=" + boundary + "\r\n";
         char resultData[];
@@ -453,7 +459,8 @@ void SendTelegramMessage(string text)
     char body[], resp[];
     string respHeaders;
 
-    ArrayResize(body, StringToCharArray(payload, body, 0, WHOLE_ARRAY, CP_UTF8) - 1);
+    int len = StringToCharArray(payload, body, 0, WHOLE_ARRAY, CP_UTF8);
+    if(len > 1) ArrayResize(body, len - 1);
     WebRequest("POST", url, NULL, NULL, 5000, body, ArraySize(body), resp, respHeaders);
 }
 
@@ -546,4 +553,3 @@ void DrawZone(string name, double topPrice, double bottomPrice, color bgCol)
         ObjectSetDouble(0, name, OBJPROP_PRICE2, bottomPrice);
     }
 }
-//+------------------------------------------------------------------+

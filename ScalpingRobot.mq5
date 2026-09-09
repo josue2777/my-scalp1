@@ -112,12 +112,30 @@ void OnTick()
 //+------------------------------------------------------------------+
 //| Pivot Points & S&D Zone Calculation                              |
 //+------------------------------------------------------------------+
+int GetHighestBar(string symbol, ENUM_TIMEFRAMES tf, int count, int start)
+{
+    double high[];
+    ArraySetAsSeries(high, true);
+    if(CopyHigh(symbol, tf, start, count, high) <= 0) return -1;
+    int idx = ArrayMaximum(high, 0, count);
+    return (idx >= 0) ? start + idx : -1;
+}
+
+int GetLowestBar(string symbol, ENUM_TIMEFRAMES tf, int count, int start)
+{
+    double low[];
+    ArraySetAsSeries(low, true);
+    if(CopyLow(symbol, tf, start, count, low) <= 0) return -1;
+    int idx = ArrayMinimum(low, 0, count);
+    return (idx >= 0) ? start + idx : -1;
+}
+
 void CalculatePivots()
 {
     int totalBars = Swing_Length * 2 + 1;
     // Search starting at bar 2 so bar 1 can break out above/below the pivot range
-    int hi_idx = iHighest(_Symbol, _Period, MODE_HIGH, totalBars, 2);
-    int lo_idx = iLowest(_Symbol, _Period, MODE_LOW, totalBars, 2);
+    int hi_idx = GetHighestBar(_Symbol, _Period, totalBars, 2);
+    int lo_idx = GetLowestBar(_Symbol, _Period, totalBars, 2);
 
     if(hi_idx >= 0 && lo_idx >= 0)
     {
@@ -473,10 +491,10 @@ void UpdateDashboard()
     double floatProfit = GetBasketFloatingProfit();
     color profitCol = (floatProfit >= 0) ? clrLime : clrLightCoral;
 
-    DrawLabel("DASH_BAL", DashboardX + 15, DashboardY + 45, "Balance: $" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2), 9, clrWhite);
-    DrawLabel("DASH_EQ",  DashboardX + 15, DashboardY + 70, "Equity:  $" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2), 9, clrWhite);
-    DrawLabel("DASH_PRF", DashboardX + 15, DashboardY + 95, "Basket Profit: $" + DoubleToString(floatProfit, 2), 9, profitCol, "Arial Bold");
-    DrawLabel("DASH_TGT", DashboardX + 15, DashboardY + 120, "Basket Target: $" + DoubleToString(TargetBasketProfit, 2), 9, clrGold);
+    DrawLabel("DASH_BAL", DashboardX + 15, DashboardY + 45, "Balance: $" + DoubleToStr(AccountInfoDouble(ACCOUNT_BALANCE), 2), 9, clrWhite);
+    DrawLabel("DASH_EQ",  DashboardX + 15, DashboardY + 70, "Equity:  $" + DoubleToStr(AccountInfoDouble(ACCOUNT_EQUITY), 2), 9, clrWhite);
+    DrawLabel("DASH_PRF", DashboardX + 15, DashboardY + 95, "Basket Profit: $" + DoubleToStr(floatProfit, 2), 9, profitCol, "Arial Bold");
+    DrawLabel("DASH_TGT", DashboardX + 15, DashboardY + 120, "Basket Target: $" + DoubleToStr(TargetBasketProfit, 2), 9, clrGold);
     DrawLabel("DASH_ACT", DashboardX + 15, DashboardY + 145, "Hedge Orders: " + IntegerToString(GetTotalPos()) + " / " + IntegerToString(MaxHedgeOrders), 9, clrWhite);
     DrawLabel("DASH_ST",  DashboardX + 15, DashboardY + 170, "EA Status: " + (BotEnabled ? "RUNNING (M5)" : "PAUSED"), 9, (BotEnabled ? clrCyan : clrTomato));
 }
@@ -547,4 +565,3 @@ void DrawZone(string name, double topPrice, double bottomPrice, color bgCol)
         ObjectSetDouble(0, name, OBJPROP_PRICE, 1, bottomPrice);
     }
 }
-//+------------------------------------------------------------------+
