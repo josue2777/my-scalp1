@@ -278,8 +278,8 @@ void UpdateDashboard()
    DrawLabel("DASH_POS", DashboardX + 15, DashboardY + 120, "Buys: " + IntegerToString(numbuys()) + " | Sells: " + IntegerToString(numsells()), 9, clrCyan);
    DrawLabel("DASH_LOT", DashboardX + 15, DashboardY + 145, "Current Lot: " + DoubleToString(currentLot, 2) + (UseAutoLot ? " (1% Auto)" : " (Fixed)"), 9, clrYellow);
 
-   bool isAlgo = (bool)TerminalInfoInteger(TERMINAL_KEYVALUE_FLAG);
-   DrawLabel("DASH_ST",  DashboardX + 15, DashboardY + 175, "Status: RUNNING", 9, clrSpringGreen);
+   bool isAlgo = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && (bool)MQLInfoInteger(MQL_TRADE_ALLOWED);
+   DrawLabel("DASH_ST",  DashboardX + 15, DashboardY + 175, "Status: " + (isAlgo ? "RUNNING" : "ALGO OFF"), 9, (isAlgo ? clrSpringGreen : clrTomato));
 }
 
 void AnimateBull()
