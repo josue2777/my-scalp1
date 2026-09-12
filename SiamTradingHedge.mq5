@@ -296,7 +296,7 @@ void ModifyAllOrders()
             {
                 if(MathAbs(m_orderInfo.StopLoss() - newSL) > _Point || MathAbs(m_orderInfo.TakeProfit() - newTP) > _Point)
                 {
-                    m_trade.OrderModify(m_orderInfo.Ticket(), openPrice, newSL, newTP, m_orderInfo.TypeTime(), m_orderInfo.Expiration());
+                    m_trade.OrderModify(m_orderInfo.Ticket(), openPrice, newSL, newTP, m_orderInfo.TypeTime(), m_orderInfo.TimeExpiration());
                 }
             }
         }
