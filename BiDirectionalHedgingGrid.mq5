@@ -1216,33 +1216,34 @@ void UpdateChartComment()
    else if(!IsSpreadOk())
       state = "SPREAD TOO WIDE";
 
-   Comment(
-      "Bi-directional Hedging Grid  |  ", _Symbol, "  |  ", EnumToString(_Period), "\n",
-      "State: ", state, "\n",
-      "GridStep: ", DoubleToString(GetGridStep(), g_digits),
-      "   (", (GridMode == FIXED_POINTS ? "FIXED " + IntegerToString(FixedGridPoints) + " pts" : "ATR x " + DoubleToString(AtrMultiplier, 2)), ")\n",
-      "Spread: ", DoubleToString(spreadPts, 1), " pts  /  max ", IntegerToString(MaxSpreadPoints),
-      "   Point=", DoubleToString(_Point, 8), "  TickSize=", DoubleToString(g_tickSize, 8), "\n",
-      "SOD Equity: ", DoubleToString(g_startOfDayEquity, 2),
-      "   Equity: ", DoubleToString(equity, 2),
-      "   DD: ", DoubleToString(ddPct, 2), "%  /  ", DoubleToString(MaxDailyDrawdownPercent, 2), "%\n",
-      "BUY  [magic ", IntegerToString(MagicNumberBuy), "]:  n=", IntegerToString(g_buy.count),
-      "  ", (g_buy.count >= 2 ? "BASKET" : "BASE"),
-      "  vol=", DoubleToString(g_buy.volumeSum, 2),
-      "  BE=", DoubleToString(g_buy.weightedAvg, g_digits),
-      "  TPbaza=", DoubleToString(g_buy.baseTp, g_digits),
-      "  TPkosz=", DoubleToString(g_buy.basketTp, g_digits),
-      "  PnL=", DoubleToString(g_buy.pnl, 2),
-      " / ", DoubleToString(BasketProfitTarget_USD, 2), "\n",
-      "SELL [magic ", IntegerToString(MagicNumberSell), "]:  n=", IntegerToString(g_sell.count),
-      "  ", (g_sell.count >= 2 ? "BASKET" : "BASE"),
-      "  vol=", DoubleToString(g_sell.volumeSum, 2),
-      "  BE=", DoubleToString(g_sell.weightedAvg, g_digits),
-      "  TPbaza=", DoubleToString(g_sell.baseTp, g_digits),
-      "  TPkosz=", DoubleToString(g_sell.basketTp, g_digits),
-      "  PnL=", DoubleToString(g_sell.pnl, 2),
-      " / ", DoubleToString(BasketProfitTarget_USD, 2)
-   );
+   string gridInfo = (GridMode == FIXED_POINTS ? "FIXED " + IntegerToString(FixedGridPoints) + " pts" : "ATR x " + DoubleToString(AtrMultiplier, 2));
+
+   string msg = "Bi-directional Hedging Grid  |  " + _Symbol + "  |  " + EnumToString(_Period) + "\n" +
+                "State: " + state + "\n" +
+                "GridStep: " + DoubleToString(GetGridStep(), g_digits) + "   (" + gridInfo + ")\n" +
+                "Spread: " + DoubleToString(spreadPts, 1) + " pts  /  max " + IntegerToString(MaxSpreadPoints) +
+                "   Point=" + DoubleToString(_Point, 8) + "  TickSize=" + DoubleToString(g_tickSize, 8) + "\n" +
+                "SOD Equity: " + DoubleToString(g_startOfDayEquity, 2) +
+                "   Equity: " + DoubleToString(equity, 2) +
+                "   DD: " + DoubleToString(ddPct, 2) + "%  /  " + DoubleToString(MaxDailyDrawdownPercent, 2) + "%\n" +
+                "BUY  [magic " + IntegerToString(MagicNumberBuy) + "]:  n=" + IntegerToString(g_buy.count) +
+                "  " + (g_buy.count >= 2 ? "BASKET" : "BASE") +
+                "  vol=" + DoubleToString(g_buy.volumeSum, 2) +
+                "  BE=" + DoubleToString(g_buy.weightedAvg, g_digits) +
+                "  TPbaza=" + DoubleToString(g_buy.baseTp, g_digits) +
+                "  TPkosz=" + DoubleToString(g_buy.basketTp, g_digits) +
+                "  PnL=" + DoubleToString(g_buy.pnl, 2) +
+                " / " + DoubleToString(BasketProfitTarget_USD, 2) + "\n" +
+                "SELL [magic " + IntegerToString(MagicNumberSell) + "]:  n=" + IntegerToString(g_sell.count) +
+                "  " + (g_sell.count >= 2 ? "BASKET" : "BASE") +
+                "  vol=" + DoubleToString(g_sell.volumeSum, 2) +
+                "  BE=" + DoubleToString(g_sell.weightedAvg, g_digits) +
+                "  TPbaza=" + DoubleToString(g_sell.baseTp, g_digits) +
+                "  TPkosz=" + DoubleToString(g_sell.basketTp, g_digits) +
+                "  PnL=" + DoubleToString(g_sell.pnl, 2) +
+                " / " + DoubleToString(BasketProfitTarget_USD, 2);
+
+   Comment(msg);
   }
 
 //====================================================================
