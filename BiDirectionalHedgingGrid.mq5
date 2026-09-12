@@ -1001,10 +1001,9 @@ double PriceDistanceForUsdProfit(const double volumeLots)
 
 double GetPositionFullPnl()
   {
-   // Profit (w walucie depozytu) + swap + prowizja — broker liczy tick value dla zlota
+   // Profit (w walucie depozytu) + swap — broker liczy tick value dla zlota
    double pnl = PositionGetDouble(POSITION_PROFIT);
    pnl += PositionGetDouble(POSITION_SWAP);
-   pnl += PositionGetDouble(POSITION_COMMISSION);
    return(pnl);
   }
 
