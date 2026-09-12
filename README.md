@@ -1,13 +1,13 @@
-# GOAT Robot v3.0 (XAUUSD) & Siam Trading Hedge EA
+# GOAT Robot v3.0 (XAUUSD) & Siam Trading Hedge EA (MT4 & MT5)
 
-Ce dépôt contient deux Experts Advisors MetaTrader 5 puissants pour le trading automatisé.
+Ce dépôt contient des Experts Advisors pour MetaTrader 4 et MetaTrader 5 pour le trading automatisé.
 
 ---
 
-## 1. Siam Trading Hedge EA (`SiamTradingHedge.mq5`)
+## 1. Siam Trading Hedge EA (`SiamTradingHedge.mq5` / `SiamTradingHedge.mq4`)
 
 ### Description
-**Siam Trading Hedge** est un outil de couverture dynamique (*Hedging & Recovery System*). Au démarrage d'un cycle, l'EA place un ordre différé **BuyStop** au-dessus du prix actuel et un **SellStop** en-dessous. Lorsqu'un côté s'active, il devient la position ouverte et l'EA réajuste immédiatement un ordre différé opposé avec un lot multiplié. L'objectif est de clôturer le cycle gagnant au Take Profit (TP).
+**Siam Trading Hedge** est un outil de couverture dynamique (*Hedging & Recovery System*) disponible en versions MetaTrader 5 (`.mq5`) et MetaTrader 4 (`.mq4`). Au démarrage d'un cycle, l'EA place un ordre différé **BuyStop** au-dessus du prix actuel et un **SellStop** en-dessous. Lorsqu'un côté s'active, il devient la position ouverte et l'EA réajuste immédiatement un ordre différé opposé avec un lot multiplié. L'objectif est de clôturer le cycle gagnant au Take Profit (TP).
 
 ### Fonctionnalités Clés & Logique
 - **Cycles de départ & Multiplicateur :** Place initialement 2 ordres différés à une distance configurée (`DistancePips`). En cas d'activation d'un côté ou d'une perte SL, le lot suivant est multiplié selon le facteur `Multiplier`.
