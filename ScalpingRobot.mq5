@@ -1,20 +1,21 @@
 //+------------------------------------------------------------------+
-//| Expert Advisor Breakout High / Low Pending Orders               |
+//| Expert Advisor High / Low Pending Orders (Breakout & Mean Rev)   |
 //+------------------------------------------------------------------+
 #property strict
 #include <Trade/Trade.mqh>
 
 // Inputs
-input double RiskPercent     = 1.0;               // Risque en % du capital
-input int Tppoints           = 4500;              // Take profit en points
-input int Slpoints           = 2500;              // Stop loss en points
-input int TslTriggerPoints   = 10;                // Points en profit pour activer le trailing stop
-input int TslPoints          = 10;                // Trailing stop en points
-input int InpLookbackBars    = 10;                // Nombre de bougies pour les plus haut / bas
-input int InpExpirationBars  = 5;                 // Expiration des ordres en attente (en nombre de bougies)
-input ENUM_TIMEFRAMES Timeframe = PERIOD_CURRENT; // Timeframe
-input int InpMagic           = 123;               // Magic number
-input string TradeComment    = "Scalping Robot";  // Commentaire de trade
+input double RiskPercent        = 1.0;               // Risque en % du capital
+input int Tppoints              = 4500;              // Take profit en points
+input int Slpoints              = 2500;              // Stop loss en points
+input int TslTriggerPoints      = 10;                // Points en profit pour activer le trailing stop
+input int TslPoints             = 10;                // Trailing stop en points
+input int InpLookbackBars       = 10;                // Nombre de bougies pour les plus haut / bas
+input int InpExpirationBars     = 5;                 // Expiration des ordres en attente (en nombre de bougies)
+input bool InpBuyLowSellHigh    = false;             // Mode Buy Low / Sell High (true = Limit, false = Stop)
+input ENUM_TIMEFRAMES Timeframe = PERIOD_CURRENT;    // Timeframe
+input int InpMagic              = 123;               // Magic number
+input string TradeComment       = "Scalping Robot";  // Commentaire de trade
 
 // Variables globales
 CTrade trade;
@@ -153,7 +154,7 @@ void ManagePendingOrders()
   }
 
 //+------------------------------------------------------------------+
-//| Placer les ordres en attente Buy Stop et Sell Stop               |
+//| Placer les ordres en attente (Stop ou Limit selon InpBuyLowSellHigh) |
 //+------------------------------------------------------------------+
 void CheckAndOpenPendingOrders()
   {
@@ -172,12 +173,6 @@ void CheckAndOpenPendingOrders()
    int digits   = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    int stopsLvl = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
 
-   double minBuyStop  = NormalizeDouble(ask + stopsLvl * point, digits);
-   double minSellStop = NormalizeDouble(bid - stopsLvl * point, digits);
-
-   double buyStopPrice  = NormalizeDouble(MathMax(highestHigh, minBuyStop), digits);
-   double sellStopPrice = NormalizeDouble(MathMin(lowestLow, minSellStop), digits);
-
    double lot = CalculateLotSize();
 
    // Expiration calculée selon le nombre de bougies
@@ -185,15 +180,40 @@ void CheckAndOpenPendingOrders()
    int expBars = MathMax(1, InpExpirationBars);
    datetime expirationTime = TimeCurrent() + expBars * periodSeconds;
 
-   // Placement Buy Stop
-   double buySL = NormalizeDouble(buyStopPrice - Slpoints * point, digits);
-   double buyTP = NormalizeDouble(buyStopPrice + Tppoints * point, digits);
-   PlacePendingOrder(ORDER_TYPE_BUY_STOP, buyStopPrice, lot, buySL, buyTP, expirationTime);
+   if(!InpBuyLowSellHigh)
+     {
+      // Mode Par Défaut : Buy High (Buy Stop au plus haut) / Sell Low (Sell Stop au plus bas)
+      double minBuyStop   = NormalizeDouble(ask + stopsLvl * point, digits);
+      double minSellStop  = NormalizeDouble(bid - stopsLvl * point, digits);
 
-   // Placement Sell Stop
-   double sellSL = NormalizeDouble(sellStopPrice + Slpoints * point, digits);
-   double sellTP = NormalizeDouble(sellStopPrice - Tppoints * point, digits);
-   PlacePendingOrder(ORDER_TYPE_SELL_STOP, sellStopPrice, lot, sellSL, sellTP, expirationTime);
+      double buyStopPrice  = NormalizeDouble(MathMax(highestHigh, minBuyStop), digits);
+      double sellStopPrice = NormalizeDouble(MathMin(lowestLow, minSellStop), digits);
+
+      double buySL  = NormalizeDouble(buyStopPrice - Slpoints * point, digits);
+      double buyTP  = NormalizeDouble(buyStopPrice + Tppoints * point, digits);
+      PlacePendingOrder(ORDER_TYPE_BUY_STOP, buyStopPrice, lot, buySL, buyTP, expirationTime);
+
+      double sellSL = NormalizeDouble(sellStopPrice + Slpoints * point, digits);
+      double sellTP = NormalizeDouble(sellStopPrice - Tppoints * point, digits);
+      PlacePendingOrder(ORDER_TYPE_SELL_STOP, sellStopPrice, lot, sellSL, sellTP, expirationTime);
+     }
+   else
+     {
+      // Mode Inversé : Buy Low (Buy Limit au plus bas) / Sell High (Sell Limit au plus haut)
+      double maxBuyLimit   = NormalizeDouble(ask - stopsLvl * point, digits);
+      double minSellLimit  = NormalizeDouble(bid + stopsLvl * point, digits);
+
+      double buyLimitPrice  = NormalizeDouble(MathMin(lowestLow, maxBuyLimit), digits);
+      double sellLimitPrice = NormalizeDouble(MathMax(highestHigh, minSellLimit), digits);
+
+      double buySL  = NormalizeDouble(buyLimitPrice - Slpoints * point, digits);
+      double buyTP  = NormalizeDouble(buyLimitPrice + Tppoints * point, digits);
+      PlacePendingOrder(ORDER_TYPE_BUY_LIMIT, buyLimitPrice, lot, buySL, buyTP, expirationTime);
+
+      double sellSL = NormalizeDouble(sellLimitPrice + Slpoints * point, digits);
+      double sellTP = NormalizeDouble(sellLimitPrice - Tppoints * point, digits);
+      PlacePendingOrder(ORDER_TYPE_SELL_LIMIT, sellLimitPrice, lot, sellSL, sellTP, expirationTime);
+     }
   }
 
 //+------------------------------------------------------------------+
