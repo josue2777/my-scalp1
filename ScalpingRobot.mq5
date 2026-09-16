@@ -1,18 +1,20 @@
 //+------------------------------------------------------------------+
-//| Expert Advisor simple buy high / sell low                       |
+//| Expert Advisor Breakout High / Low Pending Orders               |
 //+------------------------------------------------------------------+
 #property strict
 #include <Trade/Trade.mqh>
 
 // Inputs
-input double RiskPercent = 1.0;         // Risque en % du capital
-input int Tppoints = 4500;              // Take profit en points
-input int Slpoints = 2500;              // Stop loss en points
-input int TslTriggerPoints = 10;        // Points en profit pour activer le trailing stop
-input int TslPoints = 10;               // Trailing stop en points
+input double RiskPercent     = 1.0;               // Risque en % du capital
+input int Tppoints           = 4500;              // Take profit en points
+input int Slpoints           = 2500;              // Stop loss en points
+input int TslTriggerPoints   = 10;                // Points en profit pour activer le trailing stop
+input int TslPoints          = 10;                // Trailing stop en points
+input int InpLookbackBars    = 10;                // Nombre de bougies pour les plus haut / bas
+input int InpExpirationBars  = 5;                 // Expiration des ordres en attente (en nombre de bougies)
 input ENUM_TIMEFRAMES Timeframe = PERIOD_CURRENT; // Timeframe
-input int InpMagic = 123;               // Magic number
-input string TradeComment = "Scalping Robot"; // Commentaire de trade
+input int InpMagic           = 123;               // Magic number
+input string TradeComment    = "Scalping Robot";  // Commentaire de trade
 
 // Variables globales
 CTrade trade;
@@ -51,13 +53,23 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   // Gérer trailing stop pour les positions existantes de cet EA
+   // 1. Gérer trailing stop pour les positions existantes
    ManageTrailingStop();
 
-   // Si aucune position n'est actuellement ouverte par cet EA sur ce symbole, vérifier conditions d'ouverture
-   if(!HasOpenPosition())
+   // 2. Si une position active existe, annuler tous les ordres en attente restants
+   if(HasOpenPosition())
      {
-      CheckAndOpenPosition();
+      CancelPendingOrders();
+      return;
+     }
+
+   // 3. Gérer et nettoyer les ordres en attente expirés
+   ManagePendingOrders();
+
+   // 4. Si aucun ordre en attente et aucune position n'existe, placer le nouveau cycle d'ordres
+   if(!HasPendingOrders())
+     {
+      CheckAndOpenPendingOrders();
      }
   }
 
@@ -81,33 +93,136 @@ bool HasOpenPosition()
   }
 
 //+------------------------------------------------------------------+
-//| Vérifier et ouvrir une position selon la stratégie buy high / sell low |
+//| Vérifier si un ordre en attente existe                            |
 //+------------------------------------------------------------------+
-void CheckAndOpenPosition()
+bool HasPendingOrders()
   {
-   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+     {
+      ulong ticket = OrderGetTicket(i);
+      if(OrderSelect(ticket))
+        {
+         if(OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == InpMagic)
+           {
+            return true;
+           }
+        }
+     }
+   return false;
+  }
+
+//+------------------------------------------------------------------+
+//| Annuler tous les ordres en attente pour cet EA                   |
+//+------------------------------------------------------------------+
+void CancelPendingOrders()
+  {
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+     {
+      ulong ticket = OrderGetTicket(i);
+      if(OrderSelect(ticket))
+        {
+         if(OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == InpMagic)
+           {
+            trade.OrderDelete(ticket);
+           }
+        }
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| Gérer / vérifier l'expiration des ordres en attente              |
+//+------------------------------------------------------------------+
+void ManagePendingOrders()
+  {
+   datetime currentTime = TimeCurrent();
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+     {
+      ulong ticket = OrderGetTicket(i);
+      if(OrderSelect(ticket))
+        {
+         if(OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == InpMagic)
+           {
+            datetime expTime = (datetime)OrderGetInteger(ORDER_TIME_EXPIRATION);
+            if(expTime > 0 && currentTime >= expTime)
+              {
+               trade.OrderDelete(ticket);
+              }
+           }
+        }
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| Placer les ordres en attente Buy Stop et Sell Stop               |
+//+------------------------------------------------------------------+
+void CheckAndOpenPendingOrders()
+  {
+   int lookback = MathMax(1, InpLookbackBars);
+   int highestIdx = iHighest(_Symbol, Timeframe, MODE_HIGH, lookback, 1);
+   int lowestIdx  = iLowest(_Symbol, Timeframe, MODE_LOW, lookback, 1);
+
+   if(highestIdx < 0 || lowestIdx < 0) return;
+
+   double highestHigh = iHigh(_Symbol, Timeframe, highestIdx);
+   double lowestLow   = iLow(_Symbol, Timeframe, lowestIdx);
+
+   double ask   = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double bid   = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   int digits   = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   int stopsLvl = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+
+   double minBuyStop  = NormalizeDouble(ask + stopsLvl * point, digits);
+   double minSellStop = NormalizeDouble(bid - stopsLvl * point, digits);
+
+   double buyStopPrice  = NormalizeDouble(MathMax(highestHigh, minBuyStop), digits);
+   double sellStopPrice = NormalizeDouble(MathMin(lowestLow, minSellStop), digits);
+
    double lot = CalculateLotSize();
 
-   static double lastPrice = 0;
+   // Expiration calculée selon le nombre de bougies
+   int periodSeconds = PeriodSeconds(Timeframe);
+   int expBars = MathMax(1, InpExpirationBars);
+   datetime expirationTime = TimeCurrent() + expBars * periodSeconds;
 
-   if(lastPrice == 0)
-     lastPrice = ask; // Initialiser
+   // Placement Buy Stop
+   double buySL = NormalizeDouble(buyStopPrice - Slpoints * point, digits);
+   double buyTP = NormalizeDouble(buyStopPrice + Tppoints * point, digits);
+   PlacePendingOrder(ORDER_TYPE_BUY_STOP, buyStopPrice, lot, buySL, buyTP, expirationTime);
 
-   // Condition buy high
-   if(ask > lastPrice + TslTriggerPoints * point)
+   // Placement Sell Stop
+   double sellSL = NormalizeDouble(sellStopPrice + Slpoints * point, digits);
+   double sellTP = NormalizeDouble(sellStopPrice - Tppoints * point, digits);
+   PlacePendingOrder(ORDER_TYPE_SELL_STOP, sellStopPrice, lot, sellSL, sellTP, expirationTime);
+  }
+
+//+------------------------------------------------------------------+
+//| Envoyer un ordre en attente                                      |
+//+------------------------------------------------------------------+
+void PlacePendingOrder(ENUM_ORDER_TYPE orderType, double price, double lot, double sl, double tp, datetime expiration)
+  {
+   MqlTradeRequest request;
+   MqlTradeResult  result;
+   ZeroMemory(request);
+   ZeroMemory(result);
+
+   request.action           = TRADE_ACTION_PENDING;
+   request.symbol           = _Symbol;
+   request.volume           = lot;
+   request.type             = orderType;
+   request.price            = price;
+   request.sl               = sl;
+   request.tp               = tp;
+   request.deviation        = 10;
+   request.magic            = InpMagic;
+   request.comment          = TradeComment;
+   request.type_filling     = GetFillingMode();
+   request.type_time        = ORDER_TIME_SPECIFIED;
+   request.expiration       = expiration;
+
+   if(!OrderSend(request, result))
      {
-      // Ouvrir une position d'achat
-      OpenPosition(ORDER_TYPE_BUY, lot);
-      lastPrice = ask;
-     }
-   // Condition sell low
-   else if(bid < lastPrice - TslTriggerPoints * point)
-     {
-      // Ouvrir une position de vente
-      OpenPosition(ORDER_TYPE_SELL, lot);
-      lastPrice = bid;
+      Print("Erreur placement ordre en attente ", EnumToString(orderType), ": ", GetLastError(), " - Retcode: ", result.retcode);
      }
   }
 
@@ -146,51 +261,6 @@ double CalculateLotSize()
    lotSize = MathMax(minLot, MathMin(lotSize, maxLot));
 
    return(lotSize);
-  }
-
-//+------------------------------------------------------------------+
-//| Ouvrir une position                                              |
-//+------------------------------------------------------------------+
-void OpenPosition(ENUM_ORDER_TYPE type, double lot)
-  {
-   MqlTradeRequest request;
-   MqlTradeResult  result;
-   ZeroMemory(request);
-   ZeroMemory(result);
-
-   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   int digits   = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-   double price, sl, tp;
-
-   if(type == ORDER_TYPE_BUY)
-     {
-      price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-      sl = NormalizeDouble(price - Slpoints * point, digits);
-      tp = NormalizeDouble(price + Tppoints * point, digits);
-     }
-   else // ORDER_TYPE_SELL
-     {
-      price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      sl = NormalizeDouble(price + Slpoints * point, digits);
-      tp = NormalizeDouble(price - Tppoints * point, digits);
-     }
-
-   request.action       = TRADE_ACTION_DEAL;
-   request.symbol       = _Symbol;
-   request.volume       = lot;
-   request.type         = type;
-   request.price        = price;
-   request.sl           = sl;
-   request.tp           = tp;
-   request.deviation    = 10;
-   request.magic        = InpMagic;
-   request.comment      = TradeComment;
-   request.type_filling = GetFillingMode();
-
-   if(!OrderSend(request, result))
-     {
-      Print("Erreur ouverture ordre: ", GetLastError(), " - Retcode: ", result.retcode);
-     }
   }
 
 //+------------------------------------------------------------------+
