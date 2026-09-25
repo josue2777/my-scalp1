@@ -125,7 +125,6 @@ double Gd_00003;
 bool   Gb_00001;
 double Gd_00004;
 double Gd_00005;
-bool   Gb_00004;
 bool   Gb_00006;
 bool   Gb_00007;
 double Gd_00007;
@@ -802,17 +801,16 @@ void func_1011()
     if (ArraySize(Id_000CC) != Ii_00028) ArrayResize(Id_000CC, Ii_00028);
     if (ArraySize(Ii_00134) != Ii_00028) ArrayResize(Ii_00134, Ii_00028);
 
-    if (!MQLInfoInteger(MQL_TESTER)) {
-        double Ld_FFFCC[];
-        ArrayResize(Ld_FFFCC, (Ii_00028 - 1), 0);
-        ArrayCopy(Ld_FFFCC, Id_00098, 0, 1, (Ii_00028 - 1));
-        ArrayResize(Ld_FFFCC, Ii_00028, 0);
-        Gi_00000           = Ii_00028 - 1;
-        Ld_FFFCC[Gi_00000] = NormalizeDouble((Ask - Bid), _Digits);
-        ArrayCopy(Id_00098, Ld_FFFCC, 0, 0, 0);
-        Id_00060 = SimpleMAOnArray(Id_00098, Ii_00028, Ii_00028, 0, 3, 0);
-        ArrayFree(Ld_FFFCC);
-    }
+    double Ld_FFFCC[];
+    ArrayResize(Ld_FFFCC, (Ii_00028 - 1), 0);
+    ArrayCopy(Ld_FFFCC, Id_00098, 0, 1, (Ii_00028 - 1));
+    ArrayResize(Ld_FFFCC, Ii_00028, 0);
+    Gi_00000           = Ii_00028 - 1;
+    Ld_FFFCC[Gi_00000] = NormalizeDouble((Ask - Bid), _Digits);
+    ArrayCopy(Id_00098, Ld_FFFCC, 0, 0, 0);
+    Id_00060 = SimpleMAOnArray(Id_00098, Ii_00028, Ii_00028, 0, 3, 0);
+    ArrayFree(Ld_FFFCC);
+
     double Ld_FFF98[];
     int Ld_FFF64[];
     double Ld_FFF30[];
@@ -951,166 +949,76 @@ void OnTick()
     long Volume0 = iVolume(_Symbol, _Period, 0);
     int BarsTotal = iBars(_Symbol, _Period);
 
-    if (MQLInfoInteger(MQL_TESTER)) {
-        returned_double = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-        Gd_00001        = MathRound((Lots / returned_double));
-        Gd_00001        = (Gd_00001 * returned_double);
-        Gd_00002        = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-        Gd_00001        = (NormalizeDouble((Gd_00001 / Gd_00002), 0) * Gd_00002);
-        Gd_00003        = Gd_00001;
-        if ((Gd_00001 >= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX))) {
-            Gd_00003 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-        }
-        if ((Gd_00003 <= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN))) {
-            Gd_00003 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-        }
-        Gd_00001 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-        Gd_00004 = (NormalizeDouble((Gd_00003 / Gd_00001), 0) * Gd_00001);
-        Gd_00005 = Gd_00004;
-        if ((Gd_00004 >= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX))) {
-            Gd_00005 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-        }
-        if ((Gd_00005 <= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN))) {
-            Gd_00005 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-        }
-        Gd_00004        = Gd_00005;
-        returned_double = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-        Gb_00006        = (Gd_00005 < returned_double);
-        if (Gb_00006) {
-            Gb_00006 = false;
-        } else {
-            returned_double = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-            if ((Gd_00004 > returned_double)) {
-                Gb_00006 = false;
-            } else {
-                returned_double = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-                Gd_00007        = MathRound((Gd_00004 / returned_double));
-                Gi_00007        = (int)Gd_00007;
-                Gd_00008        = MathAbs(((Gi_00007 * returned_double) - Gd_00004));
-                if ((Gd_00008 > 1E-07)) {
-                    Gb_00006 = false;
-                } else {
-                    Gb_00006 = true;
+    Gi_00013 = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+    if (TrailingStop <= Gi_00013) TrailingStop = Gi_00013 + 1;
+    if (Step <= Gi_00013) Step = Gi_00013 + 1;
+
+    Gi_00013 = (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
+    Gi_00015 = Gi_00013;
+    if (Gi_00013 == 0) {
+        Gb_00013 = true;
+    } else {
+        Gb_00013 = ((PositionsTotal() + OrdersTotal()) < Gi_00015);
+    }
+    if (Gb_00013 != true) return;
+
+    Id_00030 = (SymbolInfoDouble(_Symbol, SYMBOL_MARGIN_INITIAL) * 0.01);
+    Id_00038 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    Id_00040 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    Id_00058 = NormalizeDouble((Ask - Bid), _Digits);
+    Ii_0002C = 33;
+    if (Ii_00018 < 33) Ii_00018 = 33;
+    if (Ii_0002C > TrailingStop) TrailingStop = Ii_0002C;
+
+    Id_00060 = Id_00058;
+    Ii_00028 = Ii_0001C;
+    if (ArraySize(Id_00098) != Ii_0001C) ArrayResize(Id_00098, Ii_0001C, 0);
+    if (Ii_00028 != 0) {
+        ArrayFill(Id_00098, 0, Ii_00028, Id_00060);
+    }
+    Id_00068 = NormalizeDouble((Max_Spread * _Point), _Digits);
+
+    func_1011();
+
+    //--- Pending order cleanup based on Acceleration threshold ---
+    for (int i = OrdersTotal() - 1; i >= 0; i--) {
+        ulong ticket = OrderGetTicket(i);
+        if (ticket > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
+            ENUM_ORDER_TYPE ordType = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
+            if (ordType == ORDER_TYPE_BUY_STOP) {
+                int elapsedTime = (int)TimeCurrent() - Ii_00184;
+                if (elapsedTime > Acceleration && (Id_00078 < (_Point * 70))) {
+                    trade.OrderDelete(ticket);
+                }
+            }
+            if (ordType == ORDER_TYPE_SELL_STOP) {
+                int elapsedTime = (int)TimeCurrent() - Ii_00188;
+                if (elapsedTime > Acceleration && (Id_00078 > (_Point * -70))) {
+                    trade.OrderDelete(ticket);
                 }
             }
         }
-        if (Gb_00006 == 0) return;
+    }
 
-        returned_double = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-        Gd_00008        = MathRound((Lots / returned_double));
-        Gd_00008        = (Gd_00008 * returned_double);
-        Gd_00009        = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-        Gd_00008        = (NormalizeDouble((Gd_00008 / Gd_00009), 0) * Gd_00009);
-        Gd_0000A        = Gd_00008;
-        if ((Gd_00008 >= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX))) {
-            Gd_0000A = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-        }
-        if ((Gd_0000A <= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN))) {
-            Gd_0000A = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-        }
-        Gd_00008 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-        Gd_0000B = (NormalizeDouble((Gd_0000A / Gd_00008), 0) * Gd_00008);
-        Gd_0000C = Gd_0000B;
-        if ((Gd_0000B >= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX))) {
-            Gd_0000C = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-        }
-        if ((Gd_0000C <= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN))) {
-            Gd_0000C = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-        }
+    //--- Position SL Trailing Modification ---
+    for (int i = PositionsTotal() - 1; i >= 0; i--) {
+        ulong ticket = PositionGetTicket(i);
+        if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
+            ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+            double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+            double currentSL = PositionGetDouble(POSITION_SL);
+            double currentTP = PositionGetDouble(POSITION_TP);
 
-        Gi_00013 = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
-        if (TrailingStop <= Gi_00013) {
-            TrailingStop = Gi_00013 + 1;
-        }
-        if (Step <= Gi_00013) {
-            Step = Gi_00013 + 1;
-        }
-        Gi_00013 = (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
-        Gi_00015 = Gi_00013;
-        if (Gi_00013 == 0) {
-            Gb_00013 = true;
-        } else {
-            Gb_00013 = ((PositionsTotal() + OrdersTotal()) < Gi_00015);
-        }
-        if (Gb_00013 != true) return;
-
-        Id_00030 = (SymbolInfoDouble(_Symbol, SYMBOL_MARGIN_INITIAL) * 0.01);
-        Id_00038 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-        Id_00040 = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-        Id_00058 = NormalizeDouble((Ask - Bid), _Digits);
-        Ii_0002C = 33;
-        if (Ii_00018 < 33) {
-            Ii_00018 = 33;
-        }
-        if (Ii_0002C > TrailingStop) {
-            TrailingStop = Ii_0002C;
-        }
-        Id_00060 = Id_00058;
-        Ii_00028 = Ii_0001C;
-        if (ArraySize(Id_00098) != Ii_0001C) ArrayResize(Id_00098, Ii_0001C, 0);
-        if (Ii_00028 != 0) {
-            ArrayFill(Id_00098, 0, Ii_00028, Id_00060);
-        }
-        Id_00068 = NormalizeDouble((Max_Spread * _Point), _Digits);
-
-        int Li_FFFE0 = 0;
-        func_1011();
-
-        //--- Pending order cleanup based on Acceleration threshold ---
-        for (int i = OrdersTotal() - 1; i >= 0; i--) {
-            ulong ticket = OrderGetTicket(i);
-            if (ticket > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
-                ENUM_ORDER_TYPE ordType = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
-                if (ordType == ORDER_TYPE_BUY_STOP) {
-                    int elapsedTime = (int)TimeCurrent() - Ii_00184;
-                    if (elapsedTime > Acceleration && (Id_00078 < (_Point * 70))) {
-                        trade.OrderDelete(ticket);
-                    }
-                }
-                if (ordType == ORDER_TYPE_SELL_STOP) {
-                    int elapsedTime = (int)TimeCurrent() - Ii_00188;
-                    if (elapsedTime > Acceleration && (Id_00078 > (_Point * -70))) {
-                        trade.OrderDelete(ticket);
-                    }
-                }
-            }
-        }
-
-        //--- Position SL Trailing Modification ---
-        for (int i = PositionsTotal() - 1; i >= 0; i--) {
-            ulong ticket = PositionGetTicket(i);
-            if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
-                ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-                double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
-                double currentSL = PositionGetDouble(POSITION_SL);
-                double currentTP = PositionGetDouble(POSITION_TP);
-
-                if (posType == POSITION_TYPE_BUY) {
-                    double equityRatio = (AccountInfoDouble(ACCOUNT_BALANCE) > 0) ? (AccountInfoDouble(ACCOUNT_EQUITY) / AccountInfoDouble(ACCOUNT_BALANCE)) : 0;
-                    if (AccountInfoDouble(ACCOUNT_EQUITY) > Id_00190 || (equityRatio < (StopLoss / 100.0))) {
-                        if (Id_00078 < (_Point * -70)) {
-                            double diff = (_Point * 60);
-                            if (Bid < (openPrice - diff)) {
-                                double slDiff = (Bid - currentSL);
-                                double targetDist = ((TrailingStop * _Point) * 150);
-                                if (currentSL == 0 || (slDiff > ((Ii_0002C * _Point) + targetDist))) {
-                                    double newSL = NormalizeDouble((Bid - (TrailingStop * _Point)), _Digits);
-                                    if (newSL != currentSL) {
-                                        trade.PositionModify(ticket, newSL, currentTP);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                else if (posType == POSITION_TYPE_SELL) {
-                    double equityRatio = (AccountInfoDouble(ACCOUNT_BALANCE) > 0) ? (AccountInfoDouble(ACCOUNT_EQUITY) / AccountInfoDouble(ACCOUNT_BALANCE)) : 0;
-                    if (AccountInfoDouble(ACCOUNT_EQUITY) > Id_00190 || (equityRatio < (StopLoss / 100.0))) {
-                        if ((Id_00078 > (_Point * 70)) && (Ask > ((_Point * 60) + openPrice))) {
-                            double slDiff = (currentSL - Ask);
+            if (posType == POSITION_TYPE_BUY) {
+                double equityRatio = (AccountInfoDouble(ACCOUNT_BALANCE) > 0) ? (AccountInfoDouble(ACCOUNT_EQUITY) / AccountInfoDouble(ACCOUNT_BALANCE)) : 0;
+                if (AccountInfoDouble(ACCOUNT_EQUITY) > Id_00190 || (equityRatio < (StopLoss / 100.0))) {
+                    if (Id_00078 < (_Point * -70)) {
+                        double diff = (_Point * 60);
+                        if (Bid < (openPrice - diff)) {
+                            double slDiff = (Bid - currentSL);
                             double targetDist = ((TrailingStop * _Point) * 150);
                             if (currentSL == 0 || (slDiff > ((Ii_0002C * _Point) + targetDist))) {
-                                double newSL = NormalizeDouble(((TrailingStop * _Point) + Ask), _Digits);
+                                double newSL = NormalizeDouble((Bid - (TrailingStop * _Point)), _Digits);
                                 if (newSL != currentSL) {
                                     trade.PositionModify(ticket, newSL, currentTP);
                                 }
@@ -1119,70 +1027,86 @@ void OnTick()
                     }
                 }
             }
-        }
-
-        double Ld_FFFD0 = (Lots * 200);
-        double Ld_FFFC8 = 0;
-        double Ld_FFFC0 = 1.79769313486232E+308;
-        double Ld_FFFB8 = -1.79769313486232E+308;
-
-        for (int i = PositionsTotal() - 1; i >= 0; i--) {
-            ulong ticket = PositionGetTicket(i);
-            if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
-                Li_FFFE0++;
-                Ld_FFFC8 += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-                double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
-                if (openPrice < Ld_FFFC0) Ld_FFFC0 = openPrice;
-                if (openPrice > Ld_FFFB8) Ld_FFFB8 = openPrice;
-            }
-        }
-        for (int i = OrdersTotal() - 1; i >= 0; i--) {
-            ulong ticket = OrderGetTicket(i);
-            if (ticket > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
-                Li_FFFE0++;
-            }
-        }
-
-        if ((Ld_FFFC8 > Ld_FFFD0)) {
-            for (int i = PositionsTotal() - 1; i >= 0; i--) {
-                ulong ticket = PositionGetTicket(i);
-                if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
-                    trade.PositionClose(ticket);
-                }
-            }
-        }
-
-        if (Li_FFFE0 < Ii_00014) {
-            if ((Id_00078 > (_Point * 60))) {
-                Gd_00023 = (Step * _Point);
-                Gd_00023 = (GetSAR(0) - Gd_00023);
-                if ((Gd_00023 > Close0) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
-                    double lots = LotsCalculation();
-                    double price = ((Step * _Point) + Ask);
-                    double sl = price - (StopLoss * _Point);
-                    trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
-                    Ii_00184 = (int)TimeCurrent();
-                }
-            }
-            if ((Id_00078 < (_Point * -60))) {
-                Gd_00027 = ((Step * _Point) + GetSAR(0));
-                if ((Gd_00027 < Close0)) {
-                    Gd_00027 = (Step * _Point);
-                    if (((Bid - Gd_00027) > Ld_FFFB8)) {
-                        Gd_0002C = (Step * _Point);
-                        double lots = LotsCalculation();
-                        double price = (Bid - Gd_0002C);
-                        double sl = price + (StopLoss * _Point);
-                        trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
-                        Ii_00188 = (int)TimeCurrent();
+            else if (posType == POSITION_TYPE_SELL) {
+                double equityRatio = (AccountInfoDouble(ACCOUNT_BALANCE) > 0) ? (AccountInfoDouble(ACCOUNT_EQUITY) / AccountInfoDouble(ACCOUNT_BALANCE)) : 0;
+                if (AccountInfoDouble(ACCOUNT_EQUITY) > Id_00190 || (equityRatio < (StopLoss / 100.0))) {
+                    if ((Id_00078 > (_Point * 70)) && (Ask > ((_Point * 60) + openPrice))) {
+                        double slDiff = (currentSL - Ask);
+                        double targetDist = ((TrailingStop * _Point) * 150);
+                        if (currentSL == 0 || (slDiff > ((Ii_0002C * _Point) + targetDist))) {
+                            double newSL = NormalizeDouble(((TrailingStop * _Point) + Ask), _Digits);
+                            if (newSL != currentSL) {
+                                trade.PositionModify(ticket, newSL, currentTP);
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    if (MQLInfoInteger(MQL_TESTER)) return;
+    int Li_FFFE0 = 0;
+    double Ld_FFFD0 = (Lots * 200);
+    double Ld_FFFC8 = 0;
+    double Ld_FFFC0 = 1.79769313486232E+308;
+    double Ld_FFFB8 = -1.79769313486232E+308;
 
+    for (int i = PositionsTotal() - 1; i >= 0; i--) {
+        ulong ticket = PositionGetTicket(i);
+        if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
+            Li_FFFE0++;
+            Ld_FFFC8 += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+            double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+            if (openPrice < Ld_FFFC0) Ld_FFFC0 = openPrice;
+            if (openPrice > Ld_FFFB8) Ld_FFFB8 = openPrice;
+        }
+    }
+    for (int i = OrdersTotal() - 1; i >= 0; i--) {
+        ulong ticket = OrderGetTicket(i);
+        if (ticket > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
+            Li_FFFE0++;
+        }
+    }
+
+    if (Ld_FFFC8 > Ld_FFFD0) {
+        for (int i = PositionsTotal() - 1; i >= 0; i--) {
+            ulong ticket = PositionGetTicket(i);
+            if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
+                trade.PositionClose(ticket);
+            }
+        }
+    }
+
+    // First Entry Strategy: SAR Breakout
+    if (Li_FFFE0 < Ii_00014) {
+        if (Id_00078 > (_Point * 60)) {
+            Gd_00023 = (Step * _Point);
+            Gd_00023 = (GetSAR(0) - Gd_00023);
+            if ((Gd_00023 > Close0) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
+                double lots = LotsCalculation();
+                double price = ((Step * _Point) + Ask);
+                double sl = price - (StopLoss * _Point);
+                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                Ii_00184 = (int)TimeCurrent();
+            }
+        }
+        if (Id_00078 < (_Point * -60)) {
+            Gd_00027 = ((Step * _Point) + GetSAR(0));
+            if (Gd_00027 < Close0) {
+                Gd_00027 = (Step * _Point);
+                if ((Bid - Gd_00027) > Ld_FFFB8) {
+                    Gd_0002C = (Step * _Point);
+                    double lots = LotsCalculation();
+                    double price = (Bid - Gd_0002C);
+                    double sl = price + (StopLoss * _Point);
+                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                    Ii_00188 = (int)TimeCurrent();
+                }
+            }
+        }
+    }
+
+    // Second Entry Strategy: Bollinger Bands Channel Bounce
     double Ld_FFF98 = 0;
     double Ld_FFF90 = 1.79769313486232E+308;
     double Ld_FFF88 = -1.79769313486232E+308;
@@ -1211,7 +1135,7 @@ void OnTick()
         }
     }
 
-    if ((Ld_FFF98 > 3)) {
+    if (Ld_FFF98 > 3) {
         for (int i = PositionsTotal() - 1; i >= 0; i--) {
             ulong ticket = PositionGetTicket(i);
             if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
@@ -1238,7 +1162,7 @@ void OnTick()
                 }
             }
         }
-        if ((((_Point * 50) + Ask) < Ld_FFF90)) {
+        if (((_Point * 50) + Ask) < Ld_FFF90) {
             if (Li_FFF84 == 0 || Li_FFF84 == 1) {
                 double price = ((_Point * 30) + Ask);
                 double sl = price - (StopLoss * _Point);
@@ -1250,7 +1174,7 @@ void OnTick()
         return;
     }
 
-    if ((((_Point * 20) + GetBandsUpper(1)) >= Bid)) return;
+    if (((_Point * 20) + GetBandsUpper(1)) >= Bid) return;
     if (Ii_00000_bars == BarsTotal) return;
 
     if (Volume0 < 2) {
@@ -1265,7 +1189,7 @@ void OnTick()
     }
 
     Gd_0003A = (_Point * 50);
-    if (((Bid - Gd_0003A) > Id_00190)) {
+    if ((Bid - Gd_0003A) > Id_00190) {
         if (Li_FFF84 == 0 || Li_FFF84 == -1) {
             Gd_0003C = (_Point * 30);
             double price = (Bid - Gd_0003C);
