@@ -263,8 +263,9 @@ int    Gi_00007;
 
 double returned_double;
 
-int handle_sar   = INVALID_HANDLE;
-int handle_bands = INVALID_HANDLE;
+int handle_sar         = INVALID_HANDLE;
+int handle_bands_lower = INVALID_HANDLE;
+int handle_bands_upper = INVALID_HANDLE;
 
 #ifdef Section_Lots
 class LotCalculator
@@ -325,9 +326,10 @@ class LotCalculator
     double CheckLimits(double lot)
     {
         double l = lot;
-        if (lot < _min) l = _min;
-        if (lot > _max) l = _max;
-        return l;
+        if (_step > 0) l = MathFloor(lot / _step) * _step;
+        if (l < _min) l = _min;
+        if (l > _max) l = _max;
+        return NormalizeDouble(l, 2);
     }
 
     double LotsByMoney(double Money, double Distance)
@@ -735,7 +737,7 @@ void oninitNews()
 }
 #endif
 
-double GetSAR(int shift)
+double GetSAR(int shift = 0)
 {
     if (handle_sar == INVALID_HANDLE) {
         handle_sar = iSAR(_Symbol, _Period, Sar_period, 0.2);
@@ -746,25 +748,25 @@ double GetSAR(int shift)
     return 0.0;
 }
 
-double GetBandsLower(int shift)
+double GetBandsLower(int shift = 0)
 {
-    if (handle_bands == INVALID_HANDLE) {
-        handle_bands = iBands(_Symbol, _Period, 20, 0, 2, PRICE_CLOSE);
+    if (handle_bands_lower == INVALID_HANDLE) {
+        handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
     }
     double val[];
     ArraySetAsSeries(val, true);
-    if (CopyBuffer(handle_bands, 2, shift, 1, val) > 0) return val[0];
+    if (CopyBuffer(handle_bands_lower, 2, shift, 1, val) > 0) return val[0];
     return 0.0;
 }
 
-double GetBandsUpper(int shift)
+double GetBandsUpper(int shift = 0)
 {
-    if (handle_bands == INVALID_HANDLE) {
-        handle_bands = iBands(_Symbol, _Period, 20, 0, 2, PRICE_CLOSE);
+    if (handle_bands_upper == INVALID_HANDLE) {
+        handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
     }
     double val[];
     ArraySetAsSeries(val, true);
-    if (CopyBuffer(handle_bands, 1, shift, 1, val) > 0) return val[0];
+    if (CopyBuffer(handle_bands_upper, 1, shift, 1, val) > 0) return val[0];
     return 0.0;
 }
 
@@ -860,6 +862,14 @@ int OnInit()
 {
     trade.SetExpertMagicNumber(Magic);
 
+    uint filling = (uint)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+    if ((filling & SYMBOL_FILLING_FOK) != 0)
+        trade.SetTypeFilling(ORDER_FILLING_FOK);
+    else if ((filling & SYMBOL_FILLING_IOC) != 0)
+        trade.SetTypeFilling(ORDER_FILLING_IOC);
+    else
+        trade.SetTypeFilling(ORDER_FILLING_RETURN);
+
 #ifdef Section_News
     oninitNews();
 #endif
@@ -899,8 +909,9 @@ int OnInit()
     ArrayResize(Id_000CC, Ii_0001C);
     ArrayResize(Ii_00134, Ii_0001C);
 
-    handle_sar   = iSAR(_Symbol, _Period, Sar_period, 0.2);
-    handle_bands = iBands(_Symbol, _Period, 20, 0, 2, PRICE_CLOSE);
+    handle_sar         = iSAR(_Symbol, _Period, Sar_period, 0.2);
+    handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
+    handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
 
     return (INIT_SUCCEEDED);
 }
@@ -908,7 +919,8 @@ int OnInit()
 void OnDeinit(const int reason)
 {
     if (handle_sar != INVALID_HANDLE) IndicatorRelease(handle_sar);
-    if (handle_bands != INVALID_HANDLE) IndicatorRelease(handle_bands);
+    if (handle_bands_lower != INVALID_HANDLE) IndicatorRelease(handle_bands_lower);
+    if (handle_bands_upper != INVALID_HANDLE) IndicatorRelease(handle_bands_upper);
 
 #ifdef Section_News
     news.OnDeinit(reason);
@@ -1151,7 +1163,7 @@ void OnTick()
     }
 
     Gd_00033 = (_Point * 20);
-    if (((GetBandsLower(2) - Gd_00033) > Ask) && Ii_00000_bars != BarsTotal) {
+    if (((GetBandsLower(0) - Gd_00033) > Ask) && Ii_00000_bars != BarsTotal) {
         if (Volume0 < 2) {
             for (int i = OrdersTotal() - 1; i >= 0; i--) {
                 ulong ticket = OrderGetTicket(i);
@@ -1174,7 +1186,7 @@ void OnTick()
         return;
     }
 
-    if (((_Point * 20) + GetBandsUpper(1)) >= Bid) return;
+    if (((_Point * 20) + GetBandsUpper(0)) >= Bid) return;
     if (Ii_00000_bars == BarsTotal) return;
 
     if (Volume0 < 2) {
