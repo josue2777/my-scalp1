@@ -125,7 +125,7 @@ double Gd_00005;
 bool   Gb_00004;
 bool   Gb_00006;
 bool   Gb_00007;
-string Gs_00000;
+double Gd_00007;
 double Gd_00008;
 double Gd_00009;
 double Gd_0000A;
@@ -163,6 +163,9 @@ double Id_00088;
 double Id_00090;
 double Id_00100;
 double Id_00190;
+double Id_00098[];
+double Id_000CC[];
+int    Ii_00134[];
 double Gd_00016;
 int    Ii_0002C;
 int    Ii_00018;
@@ -256,9 +259,6 @@ int    Gi_00005;
 int    Gi_00006;
 int    Gi_00007;
 
-double Id_00098[];
-double Id_000CC[];
-int    Ii_00134[];
 double returned_double;
 
 int handle_sar   = INVALID_HANDLE;
@@ -976,8 +976,8 @@ void OnTick()
             } else {
                 returned_double = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
                 Gd_00007        = MathRound((Gd_00004 / returned_double));
-                int Gi_00007    = (int)Gd_00007;
-                double Gd_00008 = MathAbs(((Gi_00007 * returned_double) - Gd_00004));
+                Gi_00007        = (int)Gd_00007;
+                Gd_00008        = MathAbs(((Gi_00007 * returned_double) - Gd_00004));
                 if ((Gd_00008 > 1E-07)) {
                     Gb_00006 = false;
                 } else {
@@ -1160,7 +1160,7 @@ void OnTick()
                 if ((Gd_00027 < Close0)) {
                     Gd_00027 = (Step * _Point);
                     if (((Bid - Gd_00027) > Ld_FFFB8)) {
-                        double Gd_0002C = (Step * _Point);
+                        Gd_0002C = (Step * _Point);
                         double lots = LotsCalculation();
                         double price = (Bid - Gd_0002C);
                         double sl = price + (StopLoss * _Point);
@@ -1217,7 +1217,7 @@ void OnTick()
         }
     }
 
-    double Gd_00033 = (_Point * 20);
+    Gd_00033 = (_Point * 20);
     if (((GetBandsLower(2) - Gd_00033) > Ask) && Ii_00000_bars != BarsTotal) {
         if (Volume0 < 2) {
             for (int i = OrdersTotal() - 1; i >= 0; i--) {
@@ -1255,10 +1255,10 @@ void OnTick()
         }
     }
 
-    double Gd_0003A = (_Point * 50);
+    Gd_0003A = (_Point * 50);
     if (((Bid - Gd_0003A) > Id_00190)) {
         if (Li_FFF84 == 0 || Li_FFF84 == -1) {
-            double Gd_0003C = (_Point * 30);
+            Gd_0003C = (_Point * 30);
             double price = (Bid - Gd_0003C);
             double sl = price + (StopLoss * _Point);
             double lots = LotsCalculation();
