@@ -14,13 +14,13 @@ CTrade trade;
 
 //--- Inputs ---
 input group "== Strategy Parameters =="
-input double Sar_period   = 0.56;
-input int    Step         = 35;
-input int    Acceleration = 7;
-input int    TrailingStop = 250;
-input int    StopLoss     = 250;
-input int    Max_Spread   = 200;
-input ulong  Magic        = 1111111;
+input double Sar_period      = 0.56;
+input int    InpStep         = 35;   // Step
+input int    Acceleration    = 7;
+input int    InpTrailingStop = 250;  // TrailingStop
+input int    StopLoss        = 250;
+input int    Max_Spread      = 200;
+input ulong  Magic           = 1111111;
 
 double Lots = 0.05; // anulado
 
@@ -112,6 +112,9 @@ int             TIME_CORRECTION, NEWS_ON = 0;
 #endif
 
 //--- All Global Variables Declarations ---
+int    Step;
+int    TrailingStop;
+
 bool   returned_b;
 double Ind_000;
 double Ind_002;
@@ -865,6 +868,9 @@ int OnInit()
 
     lotsProvider.setSymbol(_Symbol);
 
+    Step = InpStep;
+    TrailingStop = InpTrailingStop;
+
     Ii_00000_bars = 0;
     Is_00008 = "XAUUSD scalper M1";
     Ii_00014 = 4;
@@ -935,6 +941,9 @@ void OnTick()
 #ifdef Section_News
     if (!news.evaluate()) return;
 #endif
+
+    Step = InpStep;
+    TrailingStop = InpTrailingStop;
 
     double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
     double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
