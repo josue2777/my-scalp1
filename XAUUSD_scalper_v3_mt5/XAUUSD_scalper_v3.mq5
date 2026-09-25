@@ -59,6 +59,212 @@ input double        uLotsValue = 0.01;
 input double        uRange     = 100000;
 #endif
 
+#endif
+
+#define Section_DayLimit
+#ifdef Section_DayLimit
+
+enum enum_dl_mode
+{
+    dl_by_money,   // Money
+    dl_by_percent, // Account Percent
+};
+
+input group "== Daily Limits Setup =="
+input string       tdailylimits     = "== Daily Limits Setup ==";
+input bool         daily_limits_on  = false;
+input enum_dl_mode dl_mode          = dl_by_percent;
+input double       daily_win_limit  = 1;
+input double       daily_loss_limit = 1;
+input bool         dl_close_all     = true;
+
+#endif
+
+#define Section_News
+#ifdef Section_News
+
+input group "== News Setup =="
+input string    TNEWS                 = "== News Setup ==";
+input string    note                  = "http://calendar.fxstreet.com/";
+input bool      NEWS_FILTER           = false;
+input bool      NEWS_IMPOTANCE_LOW    = false;
+input bool      NEWS_IMPOTANCE_MEDIUM = true;
+input bool      NEWS_IMPOTANCE_HIGH   = true;
+input int       STOP_BEFORE_NEWS      = 30;
+input int       START_AFTER_NEWS      = 30;
+input string    Currencies_Check      = "USD,EUR,CAD,AUD,NZD,GBP";
+bool            Check_Specific_News   = false;
+string          Specific_News_Text    = "employment";
+input bool      DRAW_NEWS_CHART       = true;
+int             X                     = 10;
+int             Y                     = 280;
+string          News_Font             = "Calibri";
+color           Font_Color            = clrBlack;
+input bool      DRAW_NEWS_LINES       = false;
+color           Line_Color            = clrBlack;
+ENUM_LINE_STYLE Line_Style            = STYLE_DOT;
+int             Line_Width            = 1;
+int             Font_Size             = 8;
+string          LANG                  = "en-US";
+datetime        date;
+int             TIME_CORRECTION, NEWS_ON = 0;
+
+#endif
+
+//--- All Global Variables Declarations ---
+bool   returned_b;
+double Ind_000;
+double Ind_002;
+double Gd_00000;
+double Gd_00001;
+double Gd_00002;
+double Gd_00003;
+bool   Gb_00001;
+double Gd_00004;
+double Gd_00005;
+bool   Gb_00004;
+bool   Gb_00006;
+bool   Gb_00007;
+string Gs_00000;
+double Gd_00008;
+double Gd_00009;
+double Gd_0000A;
+bool   Gb_00008;
+double Gd_0000B;
+double Gd_0000C;
+bool   Gb_0000B;
+int    Gi_0000B;
+double Gd_0000D;
+double Gd_0000E;
+double Gd_0000F;
+double Gd_00010;
+bool   Gb_0000F;
+int    Gi_0000F;
+double Gd_00011;
+double Gd_00012;
+double Gd_00013;
+double Gd_00014;
+bool   Gb_00013;
+int    Gi_00013;
+long   returned_l;
+int    Gi_00015;
+double Id_00030;
+double Id_00038;
+double Id_00040;
+double Id_00048;
+double Id_00050;
+double Id_00058;
+double Id_00060;
+double Id_00068;
+double Id_00070;
+double Id_00078;
+double Id_00080;
+double Id_00088;
+double Id_00090;
+double Id_00100;
+double Id_00190;
+double Gd_00016;
+int    Ii_0002C;
+int    Ii_00018;
+int    Ii_00028;
+int    Ii_0001C;
+int    Gi_00016;
+int    Gi_000E1;
+double Ind_004;
+double Gd_00017;
+double Gd_00018;
+double Gd_00019;
+double Gd_0001A;
+double Gd_0001B;
+double Gd_0001C;
+double Gd_0001D;
+double Gd_0001E;
+int    returned_i;
+int    Ii_00024;
+int    Gi_00017;
+int    Ii_00188;
+bool   Gb_00017;
+bool   Gb_00018;
+bool   Gb_0001B;
+bool   Gb_0001C;
+bool   Gb_0001F;
+double Gd_0001F;
+double Gd_00020;
+int    Gi_00021;
+double Gd_00021;
+double Gd_00022;
+int    Gi_00023;
+int    Ii_00014;
+bool   Gb_00023;
+double Gd_00023;
+int    Gi_00024;
+double Gd_00024;
+int    Gi_00025;
+int    Ii_00020;
+double Gd_00026;
+double Gd_00027;
+double Gd_00028;
+double Gd_00029;
+bool   Gb_00027;
+string Is_00008;
+string Is_00168;
+string Is_00178;
+int    Ii_00184;
+int    Gi_0002A;
+double Gd_0002A;
+int    Gi_00027;
+int    Gi_0002B;
+double Gd_0002C;
+double Gd_0002D;
+double Gd_0002E;
+double Gd_0002F;
+bool   Gb_0002D;
+double Gd_00030;
+int    Gi_00031;
+double Gd_00031;
+double Gd_00032;
+int    Gi_00033;
+double Gd_00033;
+bool   Gb_00033;
+int    Ii_00000_bars;
+long   Gl_00033;
+int    Gi_00034;
+bool   Gb_00034;
+int    Gi_00035;
+double Gd_00036;
+double Gd_00037;
+double Gd_00038;
+double Gd_00039;
+bool   Gb_00037;
+int    Gi_00037;
+long   Gl_00037;
+int    Gi_0003A;
+double Gd_0003A;
+bool   Gb_0003A;
+int    Gi_0003B;
+double Gd_0003C;
+double Gd_0003D;
+double Gd_0003E;
+double Gd_0003F;
+
+int    Gi_00000;
+int    Gi_00001;
+int    Gi_00002;
+int    Gi_00003;
+int    Gi_00004;
+int    Gi_00005;
+int    Gi_00006;
+int    Gi_00007;
+
+double Id_00098[];
+double Id_000CC[];
+int    Ii_00134[];
+double returned_double;
+
+int handle_sar   = INVALID_HANDLE;
+int handle_bands = INVALID_HANDLE;
+
+#ifdef Section_Lots
 class LotCalculator
 {
     double _tickValue;
@@ -187,23 +393,7 @@ double LotsCalculation()
 }
 #endif
 
-#define Section_DayLimit
 #ifdef Section_DayLimit
-
-enum enum_dl_mode
-{
-    dl_by_money,   // Money
-    dl_by_percent, // Account Percent
-};
-
-input group "== Daily Limits Setup =="
-input string       tdailylimits     = "== Daily Limits Setup ==";
-input bool         daily_limits_on  = false;
-input enum_dl_mode dl_mode          = dl_by_percent;
-input double       daily_win_limit  = 1;
-input double       daily_loss_limit = 1;
-input bool         dl_close_all     = true;
-
 class ActionCloseAll : public iActions
 {
   public:
@@ -280,35 +470,7 @@ class ConditionDayLimit : public iConditions
 ConditionDayLimit cdDayLimit;
 #endif
 
-#define Section_News
 #ifdef Section_News
-
-input group "== News Setup =="
-input string    TNEWS                 = "== News Setup ==";
-input string    note                  = "http://calendar.fxstreet.com/";
-input bool      NEWS_FILTER           = false;
-input bool      NEWS_IMPOTANCE_LOW    = false;
-input bool      NEWS_IMPOTANCE_MEDIUM = true;
-input bool      NEWS_IMPOTANCE_HIGH   = true;
-input int       STOP_BEFORE_NEWS      = 30;
-input int       START_AFTER_NEWS      = 30;
-input string    Currencies_Check      = "USD,EUR,CAD,AUD,NZD,GBP";
-bool            Check_Specific_News   = false;
-string          Specific_News_Text    = "employment";
-input bool      DRAW_NEWS_CHART       = true;
-int             X                     = 10;
-int             Y                     = 280;
-string          News_Font             = "Calibri";
-color           Font_Color            = clrBlack;
-input bool      DRAW_NEWS_LINES       = false;
-color           Line_Color            = clrBlack;
-ENUM_LINE_STYLE Line_Style            = STYLE_DOT;
-int             Line_Width            = 1;
-int             Font_Size             = 8;
-string          LANG                  = "en-US";
-datetime        date;
-int             TIME_CORRECTION, NEWS_ON = 0;
-
 class News : public iConditions
 {
   public:
@@ -570,136 +732,6 @@ void oninitNews()
     news.OnInit();
 }
 #endif
-
-//--- Global Variables ---
-bool   returned_b;
-double Ind_000;
-double Ind_002;
-double Gd_00001;
-double Gd_00002;
-double Gd_00003;
-bool   Gb_00001;
-double Gd_00004;
-double Gd_00005;
-bool   Gb_00004;
-bool   Gb_00006;
-string Gs_00000;
-double Gd_00008;
-double Gd_00009;
-double Gd_0000A;
-bool   Gb_00008;
-double Gd_0000B;
-double Gd_0000C;
-bool   Gb_0000B;
-int    Gi_0000B;
-double Gd_0000D;
-double Gd_0000E;
-double Gd_0000F;
-double Gd_00010;
-bool   Gb_0000F;
-int    Gi_0000F;
-double Gd_00011;
-double Gd_00012;
-double Gd_00013;
-double Gd_00014;
-bool   Gb_00013;
-int    Gi_00013;
-long   returned_l;
-int    Gi_00015;
-double Id_00030;
-double Id_00038;
-double Id_00040;
-double Gd_00016;
-double Id_00058;
-int    Ii_0002C;
-int    Ii_00018;
-double Id_00060;
-int    Ii_00028;
-int    Ii_0001C;
-int    Gi_00016;
-int    Gi_000E1;
-double Ind_004;
-double Gd_00017;
-double Id_00068;
-int    returned_i;
-int    Ii_00024;
-int    Gi_00017;
-int    Ii_00188;
-bool   Gb_00017;
-double Id_00078;
-bool   Gb_0001F;
-double Gd_0001F;
-double Gd_00020;
-int    Gi_00021;
-double Gd_00021;
-double Gd_00022;
-int    Gi_00023;
-int    Ii_00014;
-bool   Gb_00023;
-double Gd_00023;
-int    Gi_00024;
-double Gd_00024;
-int    Gi_00025;
-int    Ii_00020;
-double Gd_00026;
-double Gd_00027;
-double Gd_00028;
-double Gd_00029;
-bool   Gb_00027;
-string Is_00008;
-int    Ii_00184;
-int    Gi_0002A;
-double Gd_0002A;
-int    Gi_00027;
-int    Gi_0002B;
-double Gd_0002C;
-double Gd_0002D;
-double Gd_0002E;
-double Gd_0002F;
-bool   Gb_0002D;
-double Gd_00030;
-int    Gi_00031;
-double Gd_00031;
-double Gd_00032;
-int    Gi_00033;
-double Gd_00033;
-bool   Gb_00033;
-int    Ii_00000_bars;
-long   Gl_00033;
-int    Gi_00034;
-bool   Gb_00034;
-int    Gi_00035;
-double Gd_00036;
-double Gd_00037;
-double Gd_00038;
-double Gd_00039;
-bool   Gb_00037;
-int    Gi_00037;
-long   Gl_00037;
-int    Gi_0003A;
-double Gd_0003A;
-bool   Gb_0003A;
-double Id_00190;
-int    Gi_0003B;
-double Gd_0003C;
-double Gd_0003D;
-double Gd_0003E;
-
-int    Gi_00000;
-int    Gi_00001;
-int    Gi_00002;
-int    Gi_00003;
-int    Gi_00004;
-int    Gi_00006;
-int    Gi_00007;
-
-double Id_00098[];
-double Id_000CC[];
-int    Ii_00134[];
-double returned_double;
-
-int handle_sar   = INVALID_HANDLE;
-int handle_bands = INVALID_HANDLE;
 
 double GetSAR(int shift)
 {
