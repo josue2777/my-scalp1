@@ -13,6 +13,12 @@
 CTrade trade;
 
 //--- Inputs ---
+input group "== Dashboard Setup =="
+input bool   Show_Dashboard = true;
+input int    DashboardX     = 20;
+input int    DashboardY     = 60;
+input color  DashboardColor = clrDarkSlateGray;
+
 input group "== Strategy Parameters =="
 input double Sar_period      = 0.56;
 input int    InpStep         = 35;   // Step
@@ -266,6 +272,104 @@ double returned_double;
 int handle_sar         = INVALID_HANDLE;
 int handle_bands_lower = INVALID_HANDLE;
 int handle_bands_upper = INVALID_HANDLE;
+
+//--- Dashboard UI Helper Functions ---
+void DrawRect(string name, int x, int y, int w, int h, color bg, color border = clrNone)
+{
+    if (ObjectFind(0, name) < 0) {
+        ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+        ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+        ObjectSetInteger(0, name, OBJPROP_BACK, false);
+        ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+    }
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+    ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
+    ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, (border == clrNone) ? bg : border);
+}
+
+void DrawLabel(string name, int x, int y, string text, int size = 9, color clr = clrWhite, string font = "Arial Bold")
+{
+    if (ObjectFind(0, name) < 0) {
+        ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+        ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+        ObjectSetInteger(0, name, OBJPROP_BACK, false);
+        ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+    }
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetString(0, name, OBJPROP_TEXT, text);
+    ObjectSetString(0, name, OBJPROP_FONT, font);
+    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, size);
+    ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+}
+
+void DestroyDashboard()
+{
+    for (int i = ObjectsTotal(0, -1) - 1; i >= 0; i--) {
+        string name = ObjectName(0, i, -1);
+        if (StringFind(name, "DASH_") == 0) {
+            ObjectDelete(0, name);
+        }
+    }
+}
+
+void CreateDashboard()
+{
+    if (!Show_Dashboard) return;
+    DrawRect("DASH_BG", DashboardX, DashboardY, 260, 230, DashboardColor, clrGold);
+    DrawRect("DASH_HDR", DashboardX, DashboardY, 260, 32, clrGold, clrGold);
+    DrawLabel("DASH_TITLE", DashboardX + 35, DashboardY + 7, "XAUUSD SCALPER V3", 11, clrBlack, "Impact");
+}
+
+void UpdateDashboard()
+{
+    if (!Show_Dashboard) return;
+
+    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+    double equity  = AccountInfoDouble(ACCOUNT_EQUITY);
+    double profit  = equity - balance;
+
+    int totalBuy = 0, totalSell = 0, pendingOrders = 0;
+    for (int i = PositionsTotal() - 1; i >= 0; i--) {
+        ulong t = PositionGetTicket(i);
+        if (t > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
+            if (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) totalBuy++;
+            if (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_SELL) totalSell++;
+        }
+    }
+    for (int i = OrdersTotal() - 1; i >= 0; i--) {
+        ulong t = OrderGetTicket(i);
+        if (t > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
+            pendingOrders++;
+        }
+    }
+
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    int currentSpread = (int)MathRound((ask - bid) / _Point);
+
+    color profitColor = (profit >= 0) ? clrSpringGreen : clrTomato;
+
+    DrawLabel("DASH_BAL", DashboardX + 15, DashboardY + 42, "Balance: $" + DoubleToString(balance, 2), 9, clrWhite);
+    DrawLabel("DASH_EQ",  DashboardX + 15, DashboardY + 62, "Equity:  $" + DoubleToString(equity, 2), 9, clrWhite);
+    DrawLabel("DASH_PRF", DashboardX + 15, DashboardY + 82, "P/L:      $" + DoubleToString(profit, 2), 9, profitColor);
+
+    DrawLabel("DASH_POS", DashboardX + 15, DashboardY + 110, "Positions: BUY (" + (string)totalBuy + ") | SELL (" + (string)totalSell + ")", 9, clrKhaki);
+    DrawLabel("DASH_ORD", DashboardX + 15, DashboardY + 130, "Pending Orders: " + (string)pendingOrders, 9, clrKhaki);
+
+    DrawLabel("DASH_SPD", DashboardX + 15, DashboardY + 158, "Spread: " + (string)currentSpread + " pts (Max: " + (string)Max_Spread + ")", 9, (currentSpread <= Max_Spread ? clrLawnGreen : clrTomato));
+    DrawLabel("DASH_MOM", DashboardX + 15, DashboardY + 178, "Momentum (Id_78): " + DoubleToString(Id_00078 / _Point, 1) + " pts", 9, clrDeepSkyBlue);
+
+    bool algoOn = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && (bool)MQLInfoInteger(MQL_TRADE_ALLOWED);
+    DrawLabel("DASH_STATUS", DashboardX + 15, DashboardY + 203, "Status: " + (algoOn ? "ACTIVE" : "ALGO DISABLED"), 9, (algoOn ? clrLawnGreen : clrTomato));
+
+    ChartRedraw(0);
+}
 
 #ifdef Section_Lots
 class LotCalculator
@@ -913,11 +1017,17 @@ int OnInit()
     handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
     handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
 
+    CreateDashboard();
+    UpdateDashboard();
+    EventSetTimer(1);
+
     return (INIT_SUCCEEDED);
 }
 
 void OnDeinit(const int reason)
 {
+    DestroyDashboard();
+
     if (handle_sar != INVALID_HANDLE) IndicatorRelease(handle_sar);
     if (handle_bands_lower != INVALID_HANDLE) IndicatorRelease(handle_bands_lower);
     if (handle_bands_upper != INVALID_HANDLE) IndicatorRelease(handle_bands_upper);
@@ -932,6 +1042,7 @@ void OnDeinit(const int reason)
             ObjectDelete(0, name);
         }
     }
+    EventKillTimer();
 }
 
 void OnTimer()
@@ -939,10 +1050,12 @@ void OnTimer()
 #ifdef Section_News
     news.ReadNews();
 #endif
+    UpdateDashboard();
 }
 
 void OnTick()
 {
+    UpdateDashboard();
 #ifdef Section_DayLimit
     if (daily_limits_on)
         if (!cdDayLimit.evaluate()) return;
