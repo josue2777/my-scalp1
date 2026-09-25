@@ -751,7 +751,7 @@ double GetSAR(int shift = 0)
 double GetBandsLower(int shift = 0)
 {
     if (handle_bands_lower == INVALID_HANDLE) {
-        handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
+        handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
     }
     double val[];
     ArraySetAsSeries(val, true);
@@ -762,7 +762,7 @@ double GetBandsLower(int shift = 0)
 double GetBandsUpper(int shift = 0)
 {
     if (handle_bands_upper == INVALID_HANDLE) {
-        handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
+        handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
     }
     double val[];
     ArraySetAsSeries(val, true);
@@ -809,7 +809,7 @@ void func_1011()
     ArrayResize(Ld_FFFCC, Ii_00028, 0);
     Gi_00000           = Ii_00028 - 1;
     Ld_FFFCC[Gi_00000] = NormalizeDouble((Ask - Bid), _Digits);
-    ArrayCopy(Id_00098, Ld_FFFCC, 0, 0, 0);
+    ArrayCopy(Id_00098, Ld_FFFCC, 0, 0, WHOLE_ARRAY);
     Id_00060 = SimpleMAOnArray(Id_00098, Ii_00028, Ii_00028, 0, 3, 0);
     ArrayFree(Ld_FFFCC);
 
@@ -828,8 +828,8 @@ void func_1011()
     Gi_00003           = (int)TimeCurrent();
     Gi_00004           = Gi_00002;
     Ld_FFF64[Gi_00002] = Gi_00003;
-    ArrayCopy(Id_000CC, Ld_FFF98, 0, 0, 0);
-    ArrayCopy(Ii_00134, Ld_FFF64, 0, 0, 0);
+    ArrayCopy(Id_000CC, Ld_FFF98, 0, 0, WHOLE_ARRAY);
+    ArrayCopy(Ii_00134, Ld_FFF64, 0, 0, WHOLE_ARRAY);
     Gi_00003 = Ii_00028 - 1;
     int Li_FFF2C = Ii_00134[Gi_00003];
     Gi_00006 = Gi_00003;
@@ -910,8 +910,8 @@ int OnInit()
     ArrayResize(Ii_00134, Ii_0001C);
 
     handle_sar         = iSAR(_Symbol, _Period, Sar_period, 0.2);
-    handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
-    handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
+    handle_bands_lower = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_LOW);
+    handle_bands_upper = iBands(_Symbol, _Period, 20, 0, 2.0, PRICE_HIGH);
 
     return (INIT_SUCCEEDED);
 }
@@ -1060,8 +1060,8 @@ void OnTick()
     int Li_FFFE0 = 0;
     double Ld_FFFD0 = (Lots * 200);
     double Ld_FFFC8 = 0;
-    double Ld_FFFC0 = 1.79769313486232E+308;
-    double Ld_FFFB8 = -1.79769313486232E+308;
+    double Ld_FFFC0 = 100000.0;
+    double Ld_FFFB8 = 0.0;
 
     for (int i = PositionsTotal() - 1; i >= 0; i--) {
         ulong ticket = PositionGetTicket(i);
@@ -1077,6 +1077,9 @@ void OnTick()
         ulong ticket = OrderGetTicket(i);
         if (ticket > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
             Li_FFFE0++;
+            double openPrice = OrderGetDouble(ORDER_PRICE_OPEN);
+            if (openPrice < Ld_FFFC0) Ld_FFFC0 = openPrice;
+            if (openPrice > Ld_FFFB8) Ld_FFFB8 = openPrice;
         }
     }
 
@@ -1117,6 +1120,8 @@ void OnTick()
             }
         }
     }
+
+    if (MQLInfoInteger(MQL_TESTER)) return;
 
     // Second Entry Strategy: Bollinger Bands Channel Bounce
     double Ld_FFF98 = 0;
