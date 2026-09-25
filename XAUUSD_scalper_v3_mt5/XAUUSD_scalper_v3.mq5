@@ -274,7 +274,7 @@ int handle_bands_lower = INVALID_HANDLE;
 int handle_bands_upper = INVALID_HANDLE;
 
 //--- Dashboard UI Helper Functions ---
-void DrawRect(string name, int x, int y, int w, int h, color bg, color border = clrNone)
+void DrawRect(string name, int x, int y, int w, int h, color bg, color border = clrNONE)
 {
     if (ObjectFind(0, name) < 0) {
         ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
@@ -288,7 +288,7 @@ void DrawRect(string name, int x, int y, int w, int h, color bg, color border = 
     ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
     ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
     ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
-    ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, (border == clrNone) ? bg : border);
+    ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, (border == clrNONE) ? bg : border);
 }
 
 void DrawLabel(string name, int x, int y, string text, int size = 9, color clr = clrWhite, string font = "Arial Bold")
