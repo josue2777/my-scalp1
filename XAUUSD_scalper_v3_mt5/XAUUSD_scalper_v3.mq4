@@ -49,9 +49,9 @@ interface iConditions { bool evaluate(); };
 
 #define lot_fix_on
 #define lot_equity_percent_on
-// #define lot_money_on
-// #define lot_account_percent_on
-// #define lot_range_on
+#define lot_money_on
+#define lot_account_percent_on
+#define lot_range_on
 // ------------------------------------------------------------------
 
 enum enum_lot_mode {
@@ -80,8 +80,8 @@ enum enum_lot_mode {
 
 // ------------------------------------------------------------------
 input string        tvolumen   = "== Volumen Calculation =="; // ————————————————————————
-input enum_lot_mode lot_mode   = lot_fix;                     // Lot Calculation Mode
-input double        uLotsValue = 0.01;                        // value to calculate Lots:
+input enum_lot_mode lot_mode   = lot_account_percent;        // Lot Calculation Mode (1% Risk per trade)
+input double        uLotsValue = 1.0;                        // Value to calculate Lots (% balance or fix)
 
 #ifdef lot_range_on
 input double uRange = 100000; // In Range Mode: 1.0 lot every $
@@ -94,35 +94,21 @@ double LotsCalculation()
 
     switch (lot_mode) {
 
-#ifdef lot_money_on
+    case lot_fix:
+        lots = lotsProvider.CheckLimits(uLotsValue);
+        break;
     case lot_money:
-        Print("el lotaje va por lot_money");
+        lots = lotsProvider.LotsByMoney(uLotsValue, StopLoss);
         break;
-#endif
-
-#ifdef lot_account_percent_on
     case lot_account_percent:
-        Print("el lotaje va por lot_account_percent");
+        lots = lotsProvider.LotsByBalancePercent(uLotsValue, StopLoss);
         break;
-#endif
-
-#ifdef lot_equity_percent_on
     case lot_equity_percent:
         lots = lotsProvider.LotsByEquityPercent(uLotsValue);
         break;
-#endif
-
-#ifdef lot_range_on
     case lot_range:
-        Print("el lotaje va por lot_range");
+        lots = lotsProvider.CheckLimits(uLotsValue * (AccountBalance() / (uRange > 0 ? uRange : 100000)));
         break;
-#endif
-
-#ifdef lot_fix_on
-    case lot_fix:
-        lots = uLotsValue;
-        break;
-#endif
     }
     //
     return lots;
@@ -1615,26 +1601,3 @@ int func_1015()
 
     return Li_FFFFC;
 }
-// More information about this indicator can be found at:
-// https://fxcodebase.com/code/viewtopic.php?f=27&p=157617#p157617
-
-// +------------------------------------------------------------------------------------------------+
-// |                                                            Copyright © 2025, Gehtsoft USA LLC  |
-// |                                                                         http://fxcodebase.com  |
-// |                                                               Paypal:  https://goo.gl/9Rj74e   |
-// +------------------------------------------------------------------------------------------------+
-// |                                                                   Developed by : Mario Jemic   |
-// |                                                                       mario.jemic@gmail.com    |
-// |                                                                       https://mario-jemic.com/ |
-// |                                                             Patreon :  http://tiny.cc/1ybwxz   |
-// |                                                      Buy Me a Coffee:  http://tiny.cc/bj7vxz   |
-// +-----------------+----------------------+-------------------------------------------------------+
-// |  Cryptocurrency |  Network             |  Address                                              |
-// +-----------------+----------------------+-------------------------------------------------------+
-// |  BTC            |  BTC                 |  16F5k43RXibTmna4np8bPVgmXM1CzjXFJJ                   |
-// |  SOL            |  SOL                 |  3nh5rpUKopcYLNU4zGCdUFAkM3iRQq8VVUmuzVG6VDf2         |
-// |  ETH            |  ERC20               |  0xe53aab6bc468a963a02d1319660ee60cf80fc8e7           |
-// |  BNB            |  BEP20               |  0xe53aab6bc468a963a02d1319660ee60cf80fc8e7           |
-// |  USDT           |  BEP20               |  0xe53aab6bc468a963a02d1319660ee60cf80fc8e7           |
-// |  XRP            |  BEP20               |  0xe53aab6bc468a963a02d1319660ee60cf80fc8e7           |
-// +-----------------+----------------------+-------------------------------------------------------+
