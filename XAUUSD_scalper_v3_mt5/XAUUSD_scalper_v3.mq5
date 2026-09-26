@@ -47,8 +47,8 @@ enum enum_lot_mode {
 
 input group "== Volume Calculation =="
 input string        tvolumen   = "== Volume Calculation ==";
-input enum_lot_mode lot_mode   = lot_fix;
-input double        uLotsValue = 0.01;
+input enum_lot_mode lot_mode   = lot_account_percent; // Lot Calculation Mode (1% Risk per trade)
+input double        uLotsValue = 1.0;               // Value to calculate Lots (% balance or fix)
 input double        uRange     = 100000;
 
 #endif
