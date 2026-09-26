@@ -14,6 +14,7 @@ CTrade trade;
 
 //--- Inputs ---
 input group "== Strategy Parameters =="
+input bool   InvertSignals   = true;  // Invert Buy/Sell signals
 input double Sar_period      = 0.56;
 input int    InpStep         = 35;   // Step
 input int    Acceleration    = 7;
@@ -1086,9 +1087,15 @@ void OnTick()
             Gd_00023 = (GetSAR(0) - Gd_00023);
             if ((Gd_00023 > Close0) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
                 double lots = LotsCalculation();
-                double price = ((Step * _Point) + Ask);
-                double sl = price - (StopLoss * _Point);
-                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                if (!InvertSignals) {
+                    double price = ((Step * _Point) + Ask);
+                    double sl = price - (StopLoss * _Point);
+                    trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                } else {
+                    double price = (Bid - (Step * _Point));
+                    double sl = price + (StopLoss * _Point);
+                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                }
                 Ii_00184 = (int)TimeCurrent();
             }
         }
@@ -1099,9 +1106,15 @@ void OnTick()
                 if ((Bid - Gd_00027) > Ld_FFFB8) {
                     Gd_0002C = (Step * _Point);
                     double lots = LotsCalculation();
-                    double price = (Bid - Gd_0002C);
-                    double sl = price + (StopLoss * _Point);
-                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                    if (!InvertSignals) {
+                        double price = (Bid - Gd_0002C);
+                        double sl = price + (StopLoss * _Point);
+                        trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                    } else {
+                        double price = ((Step * _Point) + Ask);
+                        double sl = price - (StopLoss * _Point);
+                        trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                    }
                     Ii_00188 = (int)TimeCurrent();
                 }
             }
@@ -1168,10 +1181,16 @@ void OnTick()
         }
         if (((_Point * 50) + Ask) < Ld_FFF90) {
             if (Li_FFF84 == 0 || Li_FFF84 == 1) {
-                double price = ((_Point * 30) + Ask);
-                double sl = price - (StopLoss * _Point);
                 double lots = LotsCalculation();
-                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                if (!InvertSignals) {
+                    double price = ((_Point * 30) + Ask);
+                    double sl = price - (StopLoss * _Point);
+                    trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                } else {
+                    double price = (Bid - (_Point * 30));
+                    double sl = price + (StopLoss * _Point);
+                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                }
             }
         }
         Ii_00000_bars = BarsTotal;
@@ -1185,7 +1204,8 @@ void OnTick()
         for (int i = OrdersTotal() - 1; i >= 0; i--) {
             ulong ticket = OrderGetTicket(i);
             if (ticket > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == Magic) {
-                if (OrderGetInteger(ORDER_TYPE) == ORDER_TYPE_SELL_STOP) {
+                ENUM_ORDER_TYPE ot = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
+                if ((!InvertSignals && ot == ORDER_TYPE_SELL_STOP) || (InvertSignals && ot == ORDER_TYPE_BUY_STOP)) {
                     trade.OrderDelete(ticket);
                 }
             }
@@ -1193,13 +1213,19 @@ void OnTick()
     }
 
     Gd_0003A = (_Point * 50);
-    if ((Bid - Gd_0003A) > Id_00190) {
+    if ((Bid - Gd_0003A) > Ld_FFF88) {
         if (Li_FFF84 == 0 || Li_FFF84 == -1) {
             Gd_0003C = (_Point * 30);
-            double price = (Bid - Gd_0003C);
-            double sl = price + (StopLoss * _Point);
             double lots = LotsCalculation();
-            trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+            if (!InvertSignals) {
+                double price = (Bid - Gd_0003C);
+                double sl = price + (StopLoss * _Point);
+                trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+            } else {
+                double price = ((_Point * 30) + Ask);
+                double sl = price - (StopLoss * _Point);
+                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+            }
         }
     }
     Ii_00000_bars = BarsTotal;
