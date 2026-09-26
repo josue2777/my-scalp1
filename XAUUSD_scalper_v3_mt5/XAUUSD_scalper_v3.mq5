@@ -31,33 +31,24 @@ interface iConditions { bool evaluate(); };
 #ifdef Section_Lots
 
 #define lot_fix_on
+#define lot_money_on
+#define lot_account_percent_on
 #define lot_equity_percent_on
+#define lot_range_on
 
 enum enum_lot_mode {
-#ifdef lot_fix_on
-    lot_fix, // Fix Lot
-#endif
-#ifdef lot_money_on
-    lot_money, // Money (require SL)
-#endif
-#ifdef lot_account_percent_on
+    lot_fix,             // Fix Lot
+    lot_money,           // Money (require SL)
     lot_account_percent, // Account Percent (require SL)
-#endif
-#ifdef lot_equity_percent_on
-    lot_equity_percent, // Equity Percent
-#endif
-#ifdef lot_range_on
-    lot_range, // Range
-#endif
+    lot_equity_percent,  // Equity Percent
+    lot_range,           // Range
 };
 
 input group "== Volume Calculation =="
 input string        tvolumen   = "== Volume Calculation ==";
 input enum_lot_mode lot_mode   = lot_fix;
 input double        uLotsValue = 0.01;
-#ifdef lot_range_on
 input double        uRange     = 100000;
-#endif
 
 #endif
 
@@ -303,12 +294,14 @@ class LotCalculator
 
     double LotsByBalancePercent(double BalancePercent, double Distance)
     {
+        setSymbol(_symbol);
         double risk = AccountInfoDouble(ACCOUNT_BALANCE) * BalancePercent / 100.0;
         return CalculateLots(risk, Distance);
     }
 
     double LotsByEquityPercent(double Percent)
     {
+        setSymbol(_symbol);
         double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
         if(freeMargin <= 0) return _min;
 
@@ -319,12 +312,22 @@ class LotCalculator
         double mcPercent = (marginRequired / freeMargin) * 100.0;
         if(mcPercent <= 0) return _min;
 
-        double lotsCalc = NormalizeDouble(Percent / mcPercent, 2);
+        double lotsCalc = Percent / mcPercent;
+        return CheckLimits(lotsCalc);
+    }
+
+    double LotsByRange(double RangeStep)
+    {
+        setSymbol(_symbol);
+        if (RangeStep <= 0) RangeStep = 100000;
+        double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+        double lotsCalc = uLotsValue * (balance / RangeStep);
         return CheckLimits(lotsCalc);
     }
 
     double CheckLimits(double lot)
     {
+        setSymbol(_symbol);
         double l = lot;
         if (_step > 0) l = MathFloor(lot / _step) * _step;
         if (l < _min) l = _min;
@@ -334,64 +337,48 @@ class LotCalculator
 
     double LotsByMoney(double Money, double Distance)
     {
+        setSymbol(_symbol);
         double risk = MathAbs(Money);
         return CalculateLots(risk, Distance);
     }
 
     double CalculateLots(double risk, double distance)
     {
-        distance *= 10;
-        if (distance == 0) return 0;
+        setSymbol(_symbol);
+        if (distance <= 0) distance = 250;
 
-        if (_modeCalc == 0) { // Forex
-            return NormalizeDouble(risk / distance / _tickValue, 2);
-        }
+        double tickSize = SymbolInfoDouble(_symbol, SYMBOL_TRADE_TICK_SIZE);
+        if (tickSize <= 0) tickSize = _points;
 
-        if (_modeCalc == 1 && _step != 1.0) {
-            double c = _contractSize * _step;
-            return NormalizeDouble(risk / (distance * c), 2);
-        }
+        double lotVal = (distance * _points / tickSize) * _tickValue;
+        if (lotVal <= 0) return CheckLimits(uLotsValue);
 
-        if (_modeCalc == 1 && _step == 1.0) {
-            double c = _contractSize * _step;
-            return MathFloor(risk / (distance * c) * 100);
-        }
-
-        return 0;
+        double lotsCalc = risk / lotVal;
+        return CheckLimits(lotsCalc);
     }
 };
 LotCalculator lotsProvider;
 
 double LotsCalculation()
 {
-    double lots = 0;
+    double lots = uLotsValue;
 
     switch (lot_mode) {
-#ifdef lot_money_on
+    case lot_fix:
+        lots = lotsProvider.CheckLimits(uLotsValue);
+        break;
     case lot_money:
-        Print("el lotaje va por lot_money");
+        lots = lotsProvider.LotsByMoney(uLotsValue, StopLoss);
         break;
-#endif
-#ifdef lot_account_percent_on
     case lot_account_percent:
-        Print("el lotaje va por lot_account_percent");
+        lots = lotsProvider.LotsByBalancePercent(uLotsValue, StopLoss);
         break;
-#endif
-#ifdef lot_equity_percent_on
     case lot_equity_percent:
         lots = lotsProvider.LotsByEquityPercent(uLotsValue);
         break;
-#endif
-#ifdef lot_range_on
     case lot_range:
-        Print("el lotaje va por lot_range");
+        lots = lotsProvider.LotsByRange(uRange);
         break;
-#endif
-#ifdef lot_fix_on
-    case lot_fix:
-        lots = uLotsValue;
-        break;
-#endif
     }
     return lots;
 }
