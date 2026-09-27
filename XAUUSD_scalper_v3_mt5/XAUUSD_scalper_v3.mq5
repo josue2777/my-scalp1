@@ -291,6 +291,10 @@ class LotCalculator
         _digits       = (double)SymbolInfoInteger(_symbol, SYMBOL_DIGITS);
         _min          = SymbolInfoDouble(_symbol, SYMBOL_VOLUME_MIN);
         _max          = SymbolInfoDouble(_symbol, SYMBOL_VOLUME_MAX);
+
+        if (_min <= 0) _min = 0.01;
+        if (_step <= 0) _step = 0.01;
+        if (_max <= 0) _max = 200.0;
     }
 
     double LotsByBalancePercent(double BalancePercent, double Distance)
@@ -350,6 +354,8 @@ class LotCalculator
 
         double tickSize = SymbolInfoDouble(_symbol, SYMBOL_TRADE_TICK_SIZE);
         if (tickSize <= 0) tickSize = _points;
+
+        if (_tickValue <= 0) _tickValue = 1.0;
 
         double lotVal = (distance * _points / tickSize) * _tickValue;
         if (lotVal <= 0) return CheckLimits(uLotsValue);
@@ -560,15 +566,14 @@ class News : public iConditions
         if (totalLines <= 0) return false;
 
         ArrayResize(l_NewsTable, 0);
-        int BackShift = 0;
 
         for (int td = 0; td < totalLines; td++) {
             int st = StringFind(arNews[td], "fxst-td-date", 0);
-            if (st < 0) { BackShift++; continue; }
+            if (st < 0) continue;
 
             int st1 = StringFind(arNews[td], ">", st) + 1;
             int end = StringFind(arNews[td], "</td>", st1);
-            if (end <= st1) { BackShift++; continue; }
+            if (end <= st1) continue;
 
             int currentSize = ArraySize(l_NewsTable);
             ArrayResize(l_NewsTable, currentSize + 1);
@@ -1214,7 +1219,7 @@ void OnTick()
 
     Gd_0003A = (_Point * 50);
     if ((Bid - Gd_0003A) > Ld_FFF88) {
-        if (Li_FFF84 == 0 || Li_FFF84 == -1) {
+        if (Li_FFF84 == 0 || Li_FFF84 == 1) {
             Gd_0003C = (_Point * 30);
             double lots = LotsCalculation();
             if (!InvertSignals) {

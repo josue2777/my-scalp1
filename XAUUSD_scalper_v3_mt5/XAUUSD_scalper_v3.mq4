@@ -29,6 +29,7 @@
 #property description "Expert Advisor"
 #property strict
 
+extern bool InvertSignals = true;  // Invert Buy/Sell signals
 extern double Sar_period   = 0.56;
 extern int    Step         = 35;
 extern int    Acceleration = 7;
@@ -139,70 +140,84 @@ class LotCalculator
         }
         _tickValue    = MarketInfo(_symbol, MODE_TICKVALUE);
         _modeCalc     = MarketInfo(_symbol, MODE_PROFITCALCMODE);
-        _contractSize = SymbolInfoDouble(_symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+        _contractSize = MarketInfo(_symbol, MODE_LOTSIZE);
         _step         = MarketInfo(_symbol, MODE_LOTSTEP);
         _points       = MarketInfo(_symbol, MODE_POINT);
         _digits       = MarketInfo(_symbol, MODE_DIGITS);
         _min          = MarketInfo(_symbol, MODE_MINLOT);
         _max          = MarketInfo(_symbol, MODE_MAXLOT);
+
+        if (_min <= 0) _min = 0.01;
+        if (_step <= 0) _step = 0.01;
+        if (_max <= 0) _max = 200.0;
     }
 
     double LotsByBalancePercent(double BalancePercent, double Distance)
     {
+        setSymbol(_symbol);
         double risk = AccountBalance() * BalancePercent / 100;
         return CalculateLots(risk, Distance);
     }
 
     double LotsByEquityPercent(double Percent)
     {
+        setSymbol(_symbol);
         double lot             = 1;
-        double marginConsumido = AccountFreeMargin() - AccountFreeMarginCheck(Symbol(), OP_BUY, lot);
-        double mcPercent       = (marginConsumido / AccountFreeMargin()) * 100;
-        double lotsCalc        = NormalizeDouble(Percent / mcPercent, 2);
+        double freeMargin      = AccountFreeMargin();
+        if (freeMargin <= 0) return _min;
+        double marginConsumido = freeMargin - AccountFreeMarginCheck(_symbol, OP_BUY, lot);
+        if (marginConsumido <= 0) return _min;
+        double mcPercent       = (marginConsumido / freeMargin) * 100;
+        double lotsCalc        = Percent / mcPercent;
 
         return CheckLimits(lotsCalc);
     }
 
     double CheckLimits(double lot)
     {
+        setSymbol(_symbol);
         double l = lot;
-        if (lot < _min) l = _min;
-        if (lot > _max) l = _max;
-        return l;
+        if (_step > 0) l = MathFloor(lot / _step) * _step;
+        if (l < _min) l = _min;
+        if (l > _max) l = _max;
+        return NormalizeDouble(l, 2);
     }
 
     double LotsByMoney(double Money, double Distance)
     {
+        setSymbol(_symbol);
         double risk = fabs(Money);
         return CalculateLots(risk, Distance);
     }
 
     double CalculateLots(double risk, double distance)
     {
-        distance *= 10;
-        if (distance == 0) {
-            // Print(__FUNCTION__, " ", "Set Distance");
-            return 0;
-        }
+        setSymbol(_symbol);
+        if (distance <= 0) distance = 250;
+
+        if (_tickValue <= 0) _tickValue = 1.0;
 
         // FOREX
         if (_modeCalc == 0) {
-            return NormalizeDouble(risk / distance / _tickValue, 2);
+            double rawLot = (distance * 10 > 0) ? (risk / (distance * 10) / _tickValue) : uLotsValue;
+            return CheckLimits(rawLot);
         }
 
         // FUTUROS
         if (_modeCalc == 1 && _step != 1.0) {
             double c = _contractSize * _step;
-            return NormalizeDouble(risk / (distance * c), 2);
+            double rawLot = (distance * 10 * c > 0) ? (risk / (distance * 10 * c)) : uLotsValue;
+            return CheckLimits(rawLot);
         }
 
         // FUTUROS SIN DECIMALES
         if (_modeCalc == 1 && _step == 1.0) {
             double c = _contractSize * _step;
-            return MathFloor(risk / (distance * c) * 100);
+            double rawLot = (distance * 10 * c > 0) ? MathFloor(risk / (distance * 10 * c) * 100) : uLotsValue;
+            return CheckLimits(rawLot);
         }
 
-        return 0;
+        return CheckLimits(uLotsValue);
     }
 };
 LotCalculator lotsProvider;
@@ -269,7 +284,7 @@ class ConditionDayLimit : public iConditions
             case dl_by_percent:
             {
                 double balance        = AccountInfoDouble(ACCOUNT_BALANCE);
-                double result_percent = (result / balance) * 100;
+                double result_percent = (balance > 0) ? (result / balance) * 100 : 0;
                 if (result_percent >= daily_win_limit || result_percent <= -daily_loss_limit) {
                     r = false;
                 }
@@ -352,7 +367,7 @@ class News : public iConditions
         if (!MQLInfoInteger(MQL_TESTER) || !MQLInfoInteger(MQL_OPTIMIZATION)) {
             if (NEWS_FILTER == true && READ_NEWS(NEWS_TABLE) && ArraySize(NEWS_TABLE) > 0) DRAW_NEWS(NEWS_TABLE);
 
-            TIME_CORRECTION = (-TimeGMTOffset());
+            TIME_CORRECTION = (int)(-TimeGMTOffset());
         }
         EventSetTimer(1);
 
@@ -454,15 +469,15 @@ class News : public iConditions
         st               = StringFind(tmpStr, "fxst-thvolatility", 0);
         st               = StringFind(tmpStr, ">", st) + 1;
         end              = StringFind(tmpStr, "</th>", st);
-        HEADS.importance = (st < end ? StringSubstr(tmpStr, st, fmin(end - st, 8)) : "");
+        HEADS.importance = (st < end ? StringSubstr(tmpStr, st, (int)fmin(end - st, 8)) : "");
         st               = StringFind(tmpStr, "fxst-thactual", 0);
         st               = StringFind(tmpStr, ">", st) + 1;
         end              = StringFind(tmpStr, "</th>", st);
-        HEADS.Actual     = (st < end ? StringSubstr(tmpStr, st, fmin(end - st, 8)) : "");
+        HEADS.Actual     = (st < end ? StringSubstr(tmpStr, st, (int)fmin(end - st, 8)) : "");
         st               = StringFind(tmpStr, "fxst-thconsensus", 0);
         st               = StringFind(tmpStr, ">", st) + 1;
         end              = StringFind(tmpStr, "</th>", st);
-        HEADS.forecast   = (st < end ? StringSubstr(tmpStr, st, fmin(end - st, 8)) : "");
+        HEADS.forecast   = (st < end ? StringSubstr(tmpStr, st, (int)fmin(end - st, 8)) : "");
         st               = StringFind(tmpStr, "fxst-thprevious", 0);
         st               = StringFind(tmpStr, ">", st) + 1;
         end              = StringFind(tmpStr, "</th>", st);
@@ -493,7 +508,6 @@ class News : public iConditions
         for (uchar tr = 1; tr < 255; tr++) {
             if (StringFind(tmpStr, CharToString(tr), 0) > 0) continue;
             int K = StringReplace(tmpStr, "</tr>", CharToString(tr));
-            // ArrayResize(arNews,StringReplace(tmpStr,"</tr>",CharToString(tr)));
             K = StringSplit(tmpStr, tr, arNews);
             ArrayResize(l_NewsTable, K);
             for (int td = 0; td < ArraySize(arNews); td++) {
@@ -544,10 +558,10 @@ class News : public iConditions
                 StringInit(l_NewsTable[td - BackShift].importance, (int)StringToInteger(StringSubstr(arNews[td], st1, end - st1)), '*');
                 st1                                  = StringFind(arNews[td], "fxst-td-event", st);
                 int st2                              = StringFind(arNews[td], "fxst-eventurl", st1);
-                st1                                  = StringFind(arNews[td], ">", fmax(st1, st2)) + 1;
+                st1                                  = StringFind(arNews[td], ">", (int)fmax(st1, st2)) + 1;
                 end                                  = StringFind(arNews[td], "</td>", st1);
                 int end1                             = StringFind(arNews[td], "</a>", st1);
-                l_NewsTable[td - BackShift].news     = StringSubstr(arNews[td], st1, (end1 > 0 ? fmin(end, end1) : end) - st1);
+                l_NewsTable[td - BackShift].news     = StringSubstr(arNews[td], st1, (end1 > 0 ? (int)fmin(end, end1) : end) - st1);
                 st1                                  = StringFind(arNews[td], "fxst-td-act", st);
                 st1                                  = StringFind(arNews[td], ">", st1) + 1;
                 end                                  = StringFind(arNews[td], "</td>", st1);
@@ -573,7 +587,6 @@ class News : public iConditions
             if (NEWS_FILTER == false) return;
             for (int i = ArraySize(l_a_news) - 1; i >= 0; i--) {
                 StringReplace(l_a_news[i].currency, " ", "");
-                int Currency_check_counter = 0;
 
                 datetime t1 = (l_a_news[i].dTime + (datetime)(START_AFTER_NEWS * 60));
                 datetime t2 = ((TimeCurrent() - (datetime)TIME_CORRECTION));
@@ -625,7 +638,7 @@ class News : public iConditions
     void DEINIT_PANEL() { ObjectsDeleteAll(0); }
 
     bool OBJECT_LABEL(const long CHART_ID = 0, const string NAME = "", const int SUB_WINDOW = 0, const int X_Axis = 0, const int Y_Axis = 0, const ENUM_BASE_CORNER CORNER = CORNER_LEFT_UPPER,
-                      const string TEXT = "", const string FONT = "", const int FONT_SIZE = 10, const color CLR = color("255,0,0"), const double ANGLE = 0.0,
+                      const string TEXT = "", const string FONT = "", const int FONT_SIZE = 10, const color CLR = clrRed, const double ANGLE = 0.0,
                       const ENUM_ANCHOR_POINT ANCHOR = ANCHOR_LEFT_UPPER, const bool BACK = false, const bool SELECTION = false, const bool HIDDEN = true, const long ZORDER = 0, string TOOLTIP = "\n")
     {
         ResetLastError();
@@ -652,8 +665,8 @@ class News : public iConditions
             ObjectSetInteger(CHART_ID, NAME, OBJPROP_XDISTANCE, X);
             ObjectSetInteger(CHART_ID, NAME, OBJPROP_YDISTANCE, Y);
         }
-        return (true);
         ChartRedraw();
+        return (true);
     }
 };
 News news;
@@ -661,7 +674,6 @@ News news;
 void oninitNews()
 {
     news.OnInit();
-    // Trader.filters.add(&news);
 }
 
 #endif
@@ -828,6 +840,8 @@ double returned_double;
 
 int    init()
 {
+    lotsProvider.setSymbol(_Symbol);
+
     #ifdef Section_News
         oninitNews();
     #endif
@@ -927,18 +941,18 @@ int start()
             Gd_00005 = MarketInfo(_Symbol, MODE_MINLOT);
         }
         Gd_00004        = Gd_00005;
-        returned_double = SymbolInfoDouble(NULL, 34);
+        returned_double = MarketInfo(_Symbol, MODE_MINLOT);
         Gb_00006        = (Gd_00005 < returned_double);
         if (Gb_00006) {
             Ls_FFFF0 = StringFormat("Volume is less than the minimum allowable", returned_double);
             Gb_00006 = false;
         } else {
-            returned_double = SymbolInfoDouble(NULL, 35);
+            returned_double = MarketInfo(_Symbol, MODE_MAXLOT);
             if ((Gd_00004 > returned_double)) {
                 Ls_FFFF0 = StringFormat("Volume is more than the maximum allowable", returned_double);
                 Gb_00006 = false;
             } else {
-                returned_double = SymbolInfoDouble(NULL, 36);
+                returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
                 Gd_00007        = round((Gd_00004 / returned_double));
                 Gi_00007        = (int)Gd_00007;
                 Gd_00008        = fabs(((Gi_00007 * returned_double) - Gd_00004));
@@ -1037,14 +1051,14 @@ int start()
             Li_FFFFC = 0;
             return Li_FFFFC;
         }
-        Gi_00013 = (int)SymbolInfoInteger(NULL, SYMBOL_TRADE_STOPS_LEVEL);
+        Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
         if (TrailingStop <= Gi_00013) {
-            Gi_00013     = (int)SymbolInfoInteger(NULL, SYMBOL_TRADE_STOPS_LEVEL);
+            Gi_00013     = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
             TrailingStop = Gi_00013 + 1;
         }
-        Gi_00013 = (int)SymbolInfoInteger(NULL, SYMBOL_TRADE_STOPS_LEVEL);
+        Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
         if (Step <= Gi_00013) {
-            Gi_00013 = (int)SymbolInfoInteger(NULL, SYMBOL_TRADE_STOPS_LEVEL);
+            Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
             Step     = Gi_00013 + 1;
         }
         Gi_00013 = (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
@@ -1086,7 +1100,7 @@ int start()
         Li_FFFDC = 0;
         if (OrdersTotal() > 0) {
             do {
-                Ii_00024 = OrderSelect(Li_FFFDC, 0, 0);
+                Ii_00024 = OrderSelect(Li_FFFDC, SELECT_BY_POS, MODE_TRADES);
                 if (OrderSymbol() == _Symbol && OrderMagicNumber() == Magic) {
                     Li_FFFE0   = Li_FFFE0 + 1;
                     returned_i = OrderType();
@@ -1096,7 +1110,7 @@ int start()
                             Gi_00017 = (int)TimeCurrent();
                             Gi_00017 = Gi_00017 - Ii_00184;
                             if (Gi_00017 > Acceleration && (Id_00078 < (_Point * 70))) {
-                                Ii_00024 = OrderDelete(OrderTicket(), 4294967295);
+                                Ii_00024 = OrderDelete(OrderTicket(), clrGray);
                             }
                             Li_FFFEC = Li_FFFEC + 1;
                         }
@@ -1105,7 +1119,7 @@ int start()
                             Gi_00017 = (int)TimeCurrent();
                             Gi_00017 = Gi_00017 - Ii_00188;
                             if (Gi_00017 > Acceleration && (Id_00078 > (_Point * -70))) {
-                                Ii_00024 = OrderDelete(OrderTicket(), 4294967295);
+                                Ii_00024 = OrderDelete(OrderTicket(), clrGray);
                             }
                             Li_FFFE8 = Li_FFFE8 + 1;
                         }
@@ -1126,7 +1140,7 @@ int start()
                                             Gd_00018 = NormalizeDouble((Bid - Gd_00018), _Digits);
                                             if ((Gd_00018 != OrderStopLoss())) {
                                                 Gd_00019 = (TrailingStop * _Point);
-                                                Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble((Bid - Gd_00019), _Digits), OrderTakeProfit(), 0, 4294967295);
+                                                Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble((Bid - Gd_00019), _Digits), OrderTakeProfit(), 0, clrGray);
                                             }
                                         }
                                     }
@@ -1146,7 +1160,7 @@ int start()
 
                                         Gd_0001C = NormalizeDouble((((TrailingStop * _Point) * 150) + Ask), _Digits);
                                         if ((Gd_0001C != OrderStopLoss())) {
-                                            Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble(((TrailingStop * _Point) + Ask), _Digits), OrderTakeProfit(), 0, 4294967295);
+                                            Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble(((TrailingStop * _Point) + Ask), _Digits), OrderTakeProfit(), 0, clrGray);
                                         }
                                     }
                                 }
@@ -1164,7 +1178,7 @@ int start()
         Li_FFFB4 = OrdersTotal() - 1;
         if (Li_FFFB4 >= 0) {
             do {
-                Li_FFFB0 = OrderSelect(Li_FFFB4, 0, 0);
+                Li_FFFB0 = OrderSelect(Li_FFFB4, SELECT_BY_POS, MODE_TRADES);
                 if (OrderMagicNumber() == Magic) {
                     Ld_FFFC8 = (Ld_FFFC8 + OrderProfit());
                 }
@@ -1181,12 +1195,12 @@ int start()
             Li_FFFAC = OrdersTotal() - 1;
             if (Li_FFFAC >= 0) {
                 do {
-                    Li_FFFA8 = OrderSelect(Li_FFFAC, 0, 0);
+                    Li_FFFA8 = OrderSelect(Li_FFFAC, SELECT_BY_POS, MODE_TRADES);
                     if (OrderType() == OP_SELL && OrderMagicNumber() == Magic) {
-                        Li_FFFA4 = OrderClose(OrderTicket(), OrderLots(), Ask, 3, 255);
+                        Li_FFFA4 = OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrGray);
                     }
                     if (OrderType() == OP_BUY && OrderMagicNumber() == Magic) {
-                        Li_FFFA0 = OrderClose(OrderTicket(), OrderLots(), Bid, 3, 255);
+                        Li_FFFA0 = OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrGray);
                     }
                     Li_FFFAC = Li_FFFAC - 1;
                 } while (Li_FFFAC >= 0);
@@ -1197,25 +1211,16 @@ int start()
                 Gd_00023 = (Step * _Point);
                 Gd_00023 = (iSAR(NULL, 0, Sar_period, 0.2, 0) - Gd_00023);
                 if ((Gd_00023 > Close[0]) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
-                    returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-                    Gd_00027        = round((Lots / returned_double));
-                    Gd_00027        = (Gd_00027 * returned_double);
-                    Gd_00028        = MarketInfo(_Symbol, MODE_LOTSTEP);
-                    Gd_00027        = (NormalizeDouble((Gd_00027 / Gd_00028), 0) * Gd_00028);
-                    Gd_00029        = Gd_00027;
-                    if ((Gd_00027 >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-                        Gd_00029 = MarketInfo(_Symbol, MODE_MAXLOT);
-                    }
-                    if ((Gd_00029 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-                        Gd_00029 = MarketInfo(_Symbol, MODE_MINLOT);
-                    }
-
-
-                    // Li_FFFE4 = OrderSend(_Symbol, 4, Gd_00029, ((Step * _Point) + Ask), Ii_00020, 0, 0, Is_00008, Magic, 0, 4294967295);
                     double lots = LotsCalculation();
-                    double price = ((Step * _Point) + Ask);
-                    double sl = price - (StopLoss * _Point);
-                    Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, 4294967295);
+                    if (!InvertSignals) {
+                        double price = ((Step * _Point) + Ask);
+                        double sl = price - (StopLoss * _Point);
+                        Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                    } else {
+                        double price = (Bid - (Step * _Point));
+                        double sl = price + (StopLoss * _Point);
+                        Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                    }
                     Ii_00184 = (int)TimeCurrent();
                 }
             }
@@ -1224,25 +1229,17 @@ int start()
                 if ((Gd_00027 < Close[0])) {
                     Gd_00027 = (Step * _Point);
                     if (((Bid - Gd_00027) > Ld_FFFB8)) {
-                        Gd_0002C        = (Step * _Point);
-                        returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-                        Gd_0002D        = round((Lots / returned_double));
-                        Gd_0002D        = (Gd_0002D * returned_double);
-                        Gd_0002E        = MarketInfo(_Symbol, MODE_LOTSTEP);
-                        Gd_0002D        = (NormalizeDouble((Gd_0002D / Gd_0002E), 0) * Gd_0002E);
-                        Gd_0002F        = Gd_0002D;
-                        if ((Gd_0002D >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-                            Gd_0002F = MarketInfo(_Symbol, MODE_MAXLOT);
-                        }
-                        if ((Gd_0002F <= MarketInfo(_Symbol, MODE_MINLOT))) {
-                            Gd_0002F = MarketInfo(_Symbol, MODE_MINLOT);
-                        }
-
+                        Gd_0002C = (Step * _Point);
                         double lots = LotsCalculation();
-                        double price = (Bid - Gd_0002C);
-                        double sl = price + (StopLoss * _Point);
-                        // Li_FFFE4 = OrderSend(_Symbol, 5, Gd_0002F, (Bid - Gd_0002C), Ii_00020, 0, 0, Is_00008, Magic, 0, 4294967295);
-                        Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, 4294967295);
+                        if (!InvertSignals) {
+                            double price = (Bid - Gd_0002C);
+                            double sl = price + (StopLoss * _Point);
+                            Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                        } else {
+                            double price = ((Step * _Point) + Ask);
+                            double sl = price - (StopLoss * _Point);
+                            Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                        }
                         Ii_00188 = (int)TimeCurrent();
                     }
                 }
@@ -1251,11 +1248,6 @@ int start()
     }
     if (IsTesting()) return 0;
 
-    // if (func_1015() == 1) {
-    //     Li_FFFFC = 0;
-    //     return Li_FFFFC;
-    // }
-
     Ld_FFF98 = 0;
     Ld_FFF90 = 1.79769313486232E+308;
     Ld_FFF88 = -1.79769313486232E+308;
@@ -1263,7 +1255,7 @@ int start()
     Li_FFF80 = OrdersTotal();
     if (Li_FFF80 >= 0) {
         do {
-            Li_FFF7C = OrderSelect(Li_FFF80, 0, 0);
+            Li_FFF7C = OrderSelect(Li_FFF80, SELECT_BY_POS, MODE_TRADES);
             if (OrderMagicNumber() == Magic) {
                 Ld_FFF98 = (Ld_FFF98 + OrderProfit());
             }
@@ -1292,18 +1284,18 @@ int start()
         Li_FFF78 = OrdersTotal() - 1;
         if (Li_FFF78 >= 0) {
             do {
-                Li_FFF74 = OrderSelect(Li_FFF78, 0, 0);
+                Li_FFF74 = OrderSelect(Li_FFF78, SELECT_BY_POS, MODE_TRADES);
                 if (OrderType() == OP_SELL && OrderMagicNumber() == Magic) {
-                    Li_FFF70 = OrderClose(OrderTicket(), OrderLots(), Ask, 3, 255);
+                    Li_FFF70 = OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrGray);
                 }
                 if (OrderType() == OP_BUY && OrderMagicNumber() == Magic) {
-                    Li_FFF6C = OrderClose(OrderTicket(), OrderLots(), Bid, 3, 255);
+                    Li_FFF6C = OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrGray);
                 }
                 if (OrderType() == OP_SELLSTOP && OrderMagicNumber() == Magic) {
-                    Li_FFF68 = OrderDelete(OrderTicket(), 4294967295);
+                    Li_FFF68 = OrderDelete(OrderTicket(), clrGray);
                 }
                 if (OrderType() == OP_BUYSTOP && OrderMagicNumber() == Magic) {
-                    Li_FFF64 = OrderDelete(OrderTicket(), 4294967295);
+                    Li_FFF64 = OrderDelete(OrderTicket(), clrGray);
                 }
                 Li_FFF78 = Li_FFF78 - 1;
             } while (Li_FFF78 >= 0);
@@ -1315,9 +1307,9 @@ int start()
             Li_FFF60 = OrdersTotal() - 1;
             if (Li_FFF60 >= 0) {
                 do {
-                    Li_FFF5C = OrderSelect(Li_FFF60, 0, 0);
+                    Li_FFF5C = OrderSelect(Li_FFF60, SELECT_BY_POS, MODE_TRADES);
                     if (OrderType() == OP_BUYSTOP && OrderMagicNumber() == Magic) {
-                        Li_FFF58 = OrderDelete(OrderTicket(), 4294967295);
+                        Li_FFF58 = OrderDelete(OrderTicket(), clrGray);
                     }
                     Li_FFF60 = Li_FFF60 - 1;
                 } while (Li_FFF60 >= 0);
@@ -1325,26 +1317,16 @@ int start()
         }
         if ((((_Point * 50) + Ask) < Ld_FFF90)) {
             if (Li_FFF84 == 0 || Li_FFF84 == 1) {
-
-                returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-                Gd_00037        = round((Lots / returned_double));
-                Gd_00037        = (Gd_00037 * returned_double);
-                Gd_00038        = MarketInfo(_Symbol, MODE_LOTSTEP);
-                Gd_00037        = (NormalizeDouble((Gd_00037 / Gd_00038), 0) * Gd_00038);
-                Gd_00039        = Gd_00037;
-                if ((Gd_00037 >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-                    Gd_00039 = MarketInfo(_Symbol, MODE_MAXLOT);
-                }
-                if ((Gd_00039 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-                    Gd_00039 = MarketInfo(_Symbol, MODE_MINLOT);
-                }
-
-
-                // Li_FFF54 = OrderSend(_Symbol, 4, Gd_00039, ((_Point * 30) + Ask), Ii_00020, 0, 0, "3782", Magic, 0, 4294967295);
-                double price = ((_Point * 30) + Ask);
-                double sl = price - (StopLoss * _Point);
                 double lots = LotsCalculation();
-                Li_FFF54 = OrderSend(_Symbol, 4, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, 4294967295);
+                if (!InvertSignals) {
+                    double price = ((_Point * 30) + Ask);
+                    double sl = price - (StopLoss * _Point);
+                    Li_FFF54 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+                } else {
+                    double price = (Bid - (_Point * 30));
+                    double sl = price + (StopLoss * _Point);
+                    Li_FFF54 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+                }
             }
         }
         Ii_00000 = Bars;
@@ -1357,9 +1339,9 @@ int start()
         Li_FFF50 = OrdersTotal() - 1;
         if (Li_FFF50 >= 0) {
             do {
-                Li_FFF4C = OrderSelect(Li_FFF50, 0, 0);
+                Li_FFF4C = OrderSelect(Li_FFF50, SELECT_BY_POS, MODE_TRADES);
                 if (OrderType() == OP_SELLSTOP && OrderMagicNumber() == Magic) {
-                    Li_FFF48 = OrderDelete(OrderTicket(), 4294967295);
+                    Li_FFF48 = OrderDelete(OrderTicket(), clrGray);
                 }
                 Li_FFF50 = Li_FFF50 - 1;
             } while (Li_FFF50 >= 0);
@@ -1368,35 +1350,21 @@ int start()
     Gd_0003A = (_Point * 50);
     if (((Bid - Gd_0003A) > Id_00190)) {
         if (Li_FFF84 == 0 || Li_FFF84 == -1) {
-
-            Gd_0003C        = (_Point * 30);
-            returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-            Gd_0003D        = round((Lots / returned_double));
-            Gd_0003D        = (Gd_0003D * returned_double);
-            Gd_0003E        = MarketInfo(_Symbol, MODE_LOTSTEP);
-            Gd_0003D        = (NormalizeDouble((Gd_0003D / Gd_0003E), 0) * Gd_0003E);
-            Gd_0003F        = Gd_0003D;
-            if ((Gd_0003D >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-                Gd_0003F = MarketInfo(_Symbol, MODE_MAXLOT);
-            }
-            if ((Gd_0003F <= MarketInfo(_Symbol, MODE_MINLOT))) {
-                Gd_0003F = MarketInfo(_Symbol, MODE_MINLOT);
-            }
-
-
-            // Li_FFF44 = OrderSend(_Symbol, 5, Gd_0003F, (Bid - Gd_0003C), Ii_00020, 0, 0, "3782", Magic, 0, 4294967295);
-            double price = (Bid - Gd_0003C);
-            double sl = price + (StopLoss * _Point);
+            Gd_0003C = (_Point * 30);
             double lots = LotsCalculation();
-            Li_FFF44 = OrderSend(_Symbol, 5, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, 4294967295);
+            if (!InvertSignals) {
+                double price = (Bid - Gd_0003C);
+                double sl = price + (StopLoss * _Point);
+                Li_FFF44 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+            } else {
+                double price = ((_Point * 30) + Ask);
+                double sl = price - (StopLoss * _Point);
+                Li_FFF44 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+            }
         }
     }
     Ii_00000 = Bars;
     Li_FFFFC = 0;
-    return Li_FFFFC;
-
-    Li_FFFFC = 0;
-
     return Li_FFFFC;
 }
 
@@ -1408,7 +1376,7 @@ int deinit()
     int    Li_FFFE0;
     int    Li_FFFFC;
 
-    Li_FFFF8 = ObjectsTotal(-1);
+    Li_FFFF8 = ObjectsTotal();
     Li_FFFE4 = Li_FFFF8 - 1;
     if (Li_FFFE4 < 0) return 0;
     do {
@@ -1439,12 +1407,12 @@ void func_1011()
         ArrayResize(Ld_FFFCC, Ii_00028, 0);
         Gi_00000           = Ii_00028 - 1;
         Ld_FFFCC[Gi_00000] = NormalizeDouble((Ask - Bid), _Digits);
-        ArrayCopy(Id_00098, Ld_FFFCC, 0, 0, 0);
+        ArrayCopy(Id_00098, Ld_FFFCC, 0, 0, WHOLE_ARRAY);
         Id_00060 = iMAOnArray(Id_00098, Ii_00028, Ii_00028, 0, 3, 0);
         ArrayFree(Ld_FFFCC);
     }
     double Ld_FFF98[];
-    double Ld_FFF64[];
+    int    Ld_FFF64[];
     double Ld_FFF30[];
     ArrayResize(Ld_FFF98, (Ii_00028 - 1), 0);
     ArrayResize(Ld_FFF64, (Ii_00028 - 1), 0);
@@ -1458,8 +1426,8 @@ void func_1011()
     Gi_00003           = (int)TimeCurrent();
     Gi_00004           = Gi_00002;
     Ld_FFF64[Gi_00002] = Gi_00003;
-    ArrayCopy(Id_000CC, Ld_FFF98, 0, 0, 0);
-    ArrayCopy(Ii_00134, Ld_FFF64, 0, 0, 0);
+    ArrayCopy(Id_000CC, Ld_FFF98, 0, 0, WHOLE_ARRAY);
+    ArrayCopy(Ii_00134, Ld_FFF64, 0, 0, WHOLE_ARRAY);
     Gi_00003 = Ii_00028 - 1;
     Li_FFF2C = Ii_00134[Gi_00003];
     Gi_00006 = Gi_00003;
@@ -1485,119 +1453,4 @@ void func_1011()
     ArrayFree(Ld_FFF30);
     ArrayFree(Ld_FFF64);
     ArrayFree(Ld_FFF98);
-}
-
-int func_1015()
-{
-    int    Li_FFFF8;
-    int    Li_FFFF4;
-    int    Li_FFFF0;
-    long   Ll_FFFE8;
-    int    Li_FFFE4;
-    int    Li_FFFE0;
-    string Ls_FFFD0;
-    int    Li_FFFFC;
-
-    Li_FFFF8 = 0;
-    Li_FFFF4 = OrdersTotal() - 1;
-    if (Li_FFFF4 >= 0) {
-        do {
-            Li_FFFF0 = OrderSelect(Li_FFFF4, 0, 0);
-            if (OrderComment() == "3782") {
-                Li_FFFF8 = Li_FFFF8 + 1;
-            }
-            Li_FFFF4 = Li_FFFF4 - 1;
-        } while (Li_FFFF4 >= 0);
-    }
-    Ll_FFFE8   = 32503680000;
-    returned_i = HistoryTotal();
-    Li_FFFE4   = returned_i - 1;
-    if (Li_FFFE4 >= 0) {
-        do {
-            Li_FFFE0 = OrderSelect(Li_FFFE4, 0, 1);
-            if (OrderComment() == "3782" && OrderOpenTime() < Ll_FFFE8) {
-                Ll_FFFE8 = OrderOpenTime();
-            }
-            Li_FFFE4 = Li_FFFE4 - 1;
-        } while (Li_FFFE4 >= 0);
-    }
-    if (Li_FFFF8 != 0) return 0;
-    Gl_00000 = TimeCurrent() - 345600;
-    if (returned_i != 238) return 0;
-    Ls_FFFD0 = "Fomezeex";
-    ObjectDelete(Ls_FFFD0);
-    ObjectCreate(0, Ls_FFFD0, OBJ_LABEL, 0, 0, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 102, 45);
-    ObjectSetInteger(0, Ls_FFFD0, 103, 75);
-    ObjectSetInteger(0, Ls_FFFD0, 101, 0);
-    ObjectSetString(0, Ls_FFFD0, 999, "Demo version is over! Buy full version!");
-    ObjectSetString(0, Ls_FFFD0, 1001, "Arial");
-    ObjectSetInteger(0, Ls_FFFD0, 100, 14);
-    ObjectSetDouble(0, Ls_FFFD0, 13, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1011, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 6, 65535);
-    ObjectSetInteger(0, Ls_FFFD0, 9, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1000, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 17, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 208, 1);
-    ObjectSetInteger(0, Ls_FFFD0, 207, 0);
-    Ls_FFFD0 = "Fomezeex2";
-    ObjectDelete(Ls_FFFD0);
-    ObjectCreate(0, Ls_FFFD0, OBJ_LABEL, 0, 0, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 102, 45);
-    ObjectSetInteger(0, Ls_FFFD0, 103, 155);
-    ObjectSetInteger(0, Ls_FFFD0, 101, 0);
-    ObjectSetString(0, Ls_FFFD0, 999, "The full version works WITHOUT time limits!");
-    ObjectSetString(0, Ls_FFFD0, 1001, "Arial");
-    ObjectSetInteger(0, Ls_FFFD0, 100, 15);
-    ObjectSetDouble(0, Ls_FFFD0, 13, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1011, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 6, 65535);
-    ObjectSetInteger(0, Ls_FFFD0, 9, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1000, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 17, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 208, 1);
-    ObjectSetInteger(0, Ls_FFFD0, 207, 0);
-    Ls_FFFD0 = "Fomezeex3";
-    ObjectDelete(Ls_FFFD0);
-    ObjectCreate(0, Ls_FFFD0, OBJ_LABEL, 0, 0, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 102, 45);
-    ObjectSetInteger(0, Ls_FFFD0, 103, 225);
-    ObjectSetInteger(0, Ls_FFFD0, 101, 0);
-    ObjectSetString(0, Ls_FFFD0, 999, "The full version can be run on 75 PCs!");
-    ObjectSetString(0, Ls_FFFD0, 1001, "Arial");
-    ObjectSetInteger(0, Ls_FFFD0, 100, 15);
-    ObjectSetDouble(0, Ls_FFFD0, 13, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1011, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 6, 65535);
-    ObjectSetInteger(0, Ls_FFFD0, 9, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1000, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 17, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 208, 1);
-    ObjectSetInteger(0, Ls_FFFD0, 207, 0);
-    Ls_FFFD0 = "Fomezeex4";
-    ObjectDelete(Ls_FFFD0);
-    ObjectCreate(0, Ls_FFFD0, OBJ_LABEL, 0, 0, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 102, 45);
-    ObjectSetInteger(0, Ls_FFFD0, 103, 295);
-    ObjectSetInteger(0, Ls_FFFD0, 101, 0);
-    ObjectSetString(0, Ls_FFFD0, 999, "Purchase link https://mql5.com/8cchb");
-    ObjectSetString(0, Ls_FFFD0, 1001, "Arial");
-    ObjectSetInteger(0, Ls_FFFD0, 100, 15);
-    ObjectSetDouble(0, Ls_FFFD0, 13, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1011, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 6, 255);
-    ObjectSetInteger(0, Ls_FFFD0, 9, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 1000, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 17, 0);
-    ObjectSetInteger(0, Ls_FFFD0, 208, 1);
-    ObjectSetInteger(0, Ls_FFFD0, 207, 0);
-    Alert("Demo version is over! Buy full version!");
-    Alert("Purchase link https://mql5.com/8cchb");
-    Li_FFFFC = 1;
-    return Li_FFFFC;
-
-    Li_FFFFC = 0;
-
-    return Li_FFFFC;
 }
