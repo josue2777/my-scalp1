@@ -46,10 +46,11 @@ enum enum_lot_mode {
 };
 
 input group "== Volume Calculation =="
-input string        tvolumen   = "== Volume Calculation ==";
-input enum_lot_mode lot_mode   = lot_account_percent; // Lot Calculation Mode (1% Risk per trade)
-input double        uLotsValue = 1.0;               // Value to calculate Lots (% balance or fix)
-input double        uRange     = 100000;
+input string        tvolumen    = "== Volume Calculation ==";
+input enum_lot_mode lot_mode    = lot_account_percent; // Lot Calculation Mode
+input double        RiskPercent = 1.0;                // Risk Percent (% of capital per trade)
+input double        uLotsValue  = 1.0;                // Fixed Lot Value or Money Amount
+input double        uRange      = 100000;
 
 #endif
 
@@ -378,10 +379,10 @@ double LotsCalculation()
         lots = lotsProvider.LotsByMoney(uLotsValue, StopLoss);
         break;
     case lot_account_percent:
-        lots = lotsProvider.LotsByBalancePercent(uLotsValue, StopLoss);
+        lots = lotsProvider.LotsByBalancePercent(RiskPercent, StopLoss);
         break;
     case lot_equity_percent:
-        lots = lotsProvider.LotsByEquityPercent(uLotsValue);
+        lots = lotsProvider.LotsByEquityPercent(RiskPercent);
         break;
     case lot_range:
         lots = lotsProvider.LotsByRange(uRange);
@@ -1219,7 +1220,7 @@ void OnTick()
 
     Gd_0003A = (_Point * 50);
     if ((Bid - Gd_0003A) > Ld_FFF88) {
-        if (Li_FFF84 == 0 || Li_FFF84 == 1) {
+        if (Li_FFF84 == 0 || Li_FFF84 == -1) {
             Gd_0003C = (_Point * 30);
             double lots = LotsCalculation();
             if (!InvertSignals) {

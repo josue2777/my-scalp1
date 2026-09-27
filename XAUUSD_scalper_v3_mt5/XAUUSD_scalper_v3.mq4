@@ -80,9 +80,10 @@ enum enum_lot_mode {
 };
 
 // ------------------------------------------------------------------
-input string        tvolumen   = "== Volumen Calculation =="; // ————————————————————————
-input enum_lot_mode lot_mode   = lot_account_percent;        // Lot Calculation Mode (1% Risk per trade)
-input double        uLotsValue = 1.0;                        // Value to calculate Lots (% balance or fix)
+input string        tvolumen    = "== Volumen Calculation =="; // ————————————————————————
+input enum_lot_mode lot_mode    = lot_account_percent;        // Lot Calculation Mode
+input double        RiskPercent = 1.0;                        // Risk Percent (% of capital per trade)
+input double        uLotsValue  = 1.0;                        // Fixed Lot Value or Money Amount
 
 #ifdef lot_range_on
 input double uRange = 100000; // In Range Mode: 1.0 lot every $
@@ -102,10 +103,10 @@ double LotsCalculation()
         lots = lotsProvider.LotsByMoney(uLotsValue, StopLoss);
         break;
     case lot_account_percent:
-        lots = lotsProvider.LotsByBalancePercent(uLotsValue, StopLoss);
+        lots = lotsProvider.LotsByBalancePercent(RiskPercent, StopLoss);
         break;
     case lot_equity_percent:
-        lots = lotsProvider.LotsByEquityPercent(uLotsValue);
+        lots = lotsProvider.LotsByEquityPercent(RiskPercent);
         break;
     case lot_range:
         lots = lotsProvider.CheckLimits(uLotsValue * (AccountBalance() / (uRange > 0 ? uRange : 100000)));
