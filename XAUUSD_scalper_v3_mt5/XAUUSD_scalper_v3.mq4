@@ -280,6 +280,7 @@ class ConditionDayLimit : public iConditions
                 if (result >= daily_win_limit || result <= -daily_loss_limit) {
                     r = false;
                 }
+                break;
             }
 
             case dl_by_percent:
@@ -289,6 +290,7 @@ class ConditionDayLimit : public iConditions
                 if (result_percent >= daily_win_limit || result_percent <= -daily_loss_limit) {
                     r = false;
                 }
+                break;
             }
         }
 
@@ -1172,16 +1174,19 @@ int start()
                 Li_FFFDC = Li_FFFDC + 1;
             } while (Li_FFFDC < OrdersTotal());
         }
-        Ld_FFFD0 = (Lots * 200);
         Ld_FFFC8 = 0;
         Ld_FFFC0 = 100000;
         Ld_FFFB8 = 0;
+        double totalOpenLots = 0;
         Li_FFFB4 = OrdersTotal() - 1;
         if (Li_FFFB4 >= 0) {
             do {
                 Li_FFFB0 = OrderSelect(Li_FFFB4, SELECT_BY_POS, MODE_TRADES);
                 if (OrderMagicNumber() == Magic) {
-                    Ld_FFFC8 = (Ld_FFFC8 + OrderProfit());
+                    Ld_FFFC8 = (Ld_FFFC8 + OrderProfit() + OrderSwap() + OrderCommission());
+                    if (OrderType() == OP_BUY || OrderType() == OP_SELL) {
+                        totalOpenLots += OrderLots();
+                    }
                 }
                 if (OrderMagicNumber() == Magic && (OrderOpenPrice() < Ld_FFFC0)) {
                     Ld_FFFC0 = OrderOpenPrice();
@@ -1192,6 +1197,9 @@ int start()
                 Li_FFFB4 = Li_FFFB4 - 1;
             } while (Li_FFFB4 >= 0);
         }
+        if (totalOpenLots <= 0) totalOpenLots = LotsCalculation();
+        Ld_FFFD0 = (totalOpenLots / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+
         if ((Ld_FFFC8 > Ld_FFFD0)) {
             Li_FFFAC = OrdersTotal() - 1;
             if (Li_FFFAC >= 0) {
@@ -1253,12 +1261,16 @@ int start()
     Ld_FFF90 = 1.79769313486232E+308;
     Ld_FFF88 = -1.79769313486232E+308;
     Li_FFF84 = 0;
+    double openLotsBollinger = 0;
     Li_FFF80 = OrdersTotal();
     if (Li_FFF80 >= 0) {
         do {
             Li_FFF7C = OrderSelect(Li_FFF80, SELECT_BY_POS, MODE_TRADES);
             if (OrderMagicNumber() == Magic) {
-                Ld_FFF98 = (Ld_FFF98 + OrderProfit());
+                Ld_FFF98 = (Ld_FFF98 + OrderProfit() + OrderSwap() + OrderCommission());
+                if (OrderType() == OP_BUY || OrderType() == OP_SELL) {
+                    openLotsBollinger += OrderLots();
+                }
             }
             if (OrderMagicNumber() == Magic && (OrderOpenPrice() < Ld_FFF90)) {
                 Ld_FFF90 = OrderOpenPrice();
@@ -1281,7 +1293,10 @@ int start()
             Li_FFF80 = Li_FFF80 - 1;
         } while (Li_FFF80 >= 0);
     }
-    if ((Ld_FFF98 > 3)) {
+    if (openLotsBollinger <= 0) openLotsBollinger = LotsCalculation();
+    double targetProfitBollinger = (openLotsBollinger / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+
+    if ((Ld_FFF98 > targetProfitBollinger)) {
         Li_FFF78 = OrdersTotal() - 1;
         if (Li_FFF78 >= 0) {
             do {
