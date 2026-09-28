@@ -26,7 +26,7 @@
 #property copyright "Copyright © 2025, Gehtsoft USA LLC"
 #property link      "http://fxcodebase.com"
 #property version "1.0"
-#property description "Expert Advisor"
+#property description "Expert Advisor XAUUSD Scalper v3 - MT4 Version"
 #property strict
 
 extern bool InvertSignals = true;  // Invert Buy/Sell signals
@@ -81,40 +81,13 @@ enum enum_lot_mode {
 
 // ------------------------------------------------------------------
 input string        tvolumen    = "== Volumen Calculation =="; // ————————————————————————
-input enum_lot_mode lot_mode    = lot_account_percent;        // Lot Calculation Mode
+input enum_lot_mode lot_mode    = lot_fix;                    // Lot Calculation Mode (Fixed Lot)
 input double        RiskPercent = 1.0;                        // Risk Percent (% of capital per trade)
-input double        uLotsValue  = 1.0;                        // Fixed Lot Value or Money Amount
+input double        uLotsValue  = 0.03;                       // Fixed Lot Size = 0.03
 
 #ifdef lot_range_on
 input double uRange = 100000; // In Range Mode: 1.0 lot every $
 #endif
-
-// MARK: funcion LotsCalculation
-double LotsCalculation()
-{
-    double lots = 0;
-
-    switch (lot_mode) {
-
-    case lot_fix:
-        lots = lotsProvider.CheckLimits(uLotsValue);
-        break;
-    case lot_money:
-        lots = lotsProvider.LotsByMoney(uLotsValue, StopLoss);
-        break;
-    case lot_account_percent:
-        lots = lotsProvider.LotsByBalancePercent(RiskPercent, StopLoss);
-        break;
-    case lot_equity_percent:
-        lots = lotsProvider.LotsByEquityPercent(RiskPercent);
-        break;
-    case lot_range:
-        lots = lotsProvider.CheckLimits(uLotsValue * (AccountBalance() / (uRange > 0 ? uRange : 100000)));
-        break;
-    }
-    //
-    return lots;
-}
 
 class LotCalculator
 {
@@ -222,6 +195,33 @@ class LotCalculator
     }
 };
 LotCalculator lotsProvider;
+
+// MARK: funcion LotsCalculation
+double LotsCalculation()
+{
+    double lots = 0;
+
+    switch (lot_mode) {
+
+    case lot_fix:
+        lots = lotsProvider.CheckLimits(uLotsValue);
+        break;
+    case lot_money:
+        lots = lotsProvider.LotsByMoney(uLotsValue, StopLoss);
+        break;
+    case lot_account_percent:
+        lots = lotsProvider.LotsByBalancePercent(RiskPercent, StopLoss);
+        break;
+    case lot_equity_percent:
+        lots = lotsProvider.LotsByEquityPercent(RiskPercent);
+        break;
+    case lot_range:
+        lots = lotsProvider.CheckLimits(uLotsValue * (AccountBalance() / (uRange > 0 ? uRange : 100000)));
+        break;
+    }
+    //
+    return lots;
+}
 
 #endif
 
@@ -883,7 +883,6 @@ int start()
 
     if(!news.evaluate()) return 0;
 
-    string Ls_FFFF0;
     int    Li_FFFFC;
     int    Li_FFFEC;
     int    Li_FFFE8;
@@ -921,342 +920,207 @@ int start()
     int    Li_FFF48;
     int    Li_FFF44;
 
-    if (IsTesting()) {
-        returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_00001        = round((Lots / returned_double));
-        Gd_00001        = (Gd_00001 * returned_double);
-        Gd_00002        = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_00001        = (NormalizeDouble((Gd_00001 / Gd_00002), 0) * Gd_00002);
-        Gd_00003        = Gd_00001;
-        if ((Gd_00001 >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_00003 = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_00003 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_00003 = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        Gd_00001 = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_00004 = (NormalizeDouble((Gd_00003 / Gd_00001), 0) * Gd_00001);
-        Gd_00005 = Gd_00004;
-        if ((Gd_00004 >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_00005 = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_00005 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_00005 = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        Gd_00004        = Gd_00005;
-        returned_double = MarketInfo(_Symbol, MODE_MINLOT);
-        Gb_00006        = (Gd_00005 < returned_double);
-        if (Gb_00006) {
-            Ls_FFFF0 = StringFormat("Volume is less than the minimum allowable", returned_double);
-            Gb_00006 = false;
-        } else {
-            returned_double = MarketInfo(_Symbol, MODE_MAXLOT);
-            if ((Gd_00004 > returned_double)) {
-                Ls_FFFF0 = StringFormat("Volume is more than the maximum allowable", returned_double);
-                Gb_00006 = false;
-            } else {
-                returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-                Gd_00007        = round((Gd_00004 / returned_double));
-                Gi_00007        = (int)Gd_00007;
-                Gd_00008        = fabs(((Gi_00007 * returned_double) - Gd_00004));
-                if ((Gd_00008 > 1E-07)) {
-                    Ls_FFFF0 = StringFormat("The volume is not a multiple of", returned_double, (Gi_00007 * returned_double));
-                    Gb_00006 = false;
-                } else {
-                    Ls_FFFF0 = "Correct value of volume";
-                    Gb_00006 = true;
-                }
-            }
-        }
-        if (Gb_00006 == 0) {
-            Li_FFFFC = 0;
-            return Li_FFFFC;
-        }
-        returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_00008        = round((Lots / returned_double));
-        Gd_00008        = (Gd_00008 * returned_double);
-        Gd_00009        = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_00008        = (NormalizeDouble((Gd_00008 / Gd_00009), 0) * Gd_00009);
-        Gd_0000A        = Gd_00008;
-        if ((Gd_00008 >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_0000A = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_0000A <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_0000A = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        Gd_00008 = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_0000B = (NormalizeDouble((Gd_0000A / Gd_00008), 0) * Gd_00008);
-        Gd_0000C = Gd_0000B;
-        if ((Gd_0000B >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_0000C = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_0000C <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_0000C = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        if (AccountFreeMarginCheck(_Symbol, 0, Gd_0000C) <= 0 || GetLastError() == 134) {
-
-            Alert("Not enough money on the account!");
-            Li_FFFFC = 0;
-            return Li_FFFFC;
-        }
-        returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_0000B        = round((Lots / returned_double));
-        Gd_0000B        = (Gd_0000B * returned_double);
-        Gd_0000D        = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_0000B        = (NormalizeDouble((Gd_0000B / Gd_0000D), 0) * Gd_0000D);
-        Gd_0000E        = Gd_0000B;
-        if ((Gd_0000B >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_0000E = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_0000E <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_0000E = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        Gd_0000B = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_0000F = (NormalizeDouble((Gd_0000E / Gd_0000B), 0) * Gd_0000B);
-        Gd_00010 = Gd_0000F;
-        if ((Gd_0000F >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_00010 = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_00010 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_00010 = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        if (AccountFreeMarginCheck(_Symbol, 1, Gd_00010) <= 0 || GetLastError() == 134) {
-
-            Alert("Not enough money on the account!");
-            Li_FFFFC = 0;
-            return Li_FFFFC;
-        }
-        returned_double = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_0000F        = round((Lots / returned_double));
-        Gd_0000F        = (Gd_0000F * returned_double);
-        Gd_00011        = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_0000F        = (NormalizeDouble((Gd_0000F / Gd_00011), 0) * Gd_00011);
-        Gd_00012        = Gd_0000F;
-        if ((Gd_0000F >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_00012 = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_00012 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_00012 = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        Gd_0000F = MarketInfo(_Symbol, MODE_LOTSTEP);
-        Gd_00013 = (NormalizeDouble((Gd_00012 / Gd_0000F), 0) * Gd_0000F);
-        Gd_00014 = Gd_00013;
-        if ((Gd_00013 >= MarketInfo(_Symbol, MODE_MAXLOT))) {
-            Gd_00014 = MarketInfo(_Symbol, MODE_MAXLOT);
-        }
-        if ((Gd_00014 <= MarketInfo(_Symbol, MODE_MINLOT))) {
-            Gd_00014 = MarketInfo(_Symbol, MODE_MINLOT);
-        }
-        Gd_00013 = (Gd_00014 * MarketInfo(_Symbol, MODE_MARGINREQUIRED));
-        Gb_00013 = (Gd_00013 > AccountFreeMargin());
-        if (Gb_00013) {
-            Alert("Not enough money on the account!");
-            Li_FFFFC = 0;
-            return Li_FFFFC;
-        }
+    Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
+    if (TrailingStop <= Gi_00013) {
+        Gi_00013     = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
+        TrailingStop = Gi_00013 + 1;
+    }
+    Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
+    if (Step <= Gi_00013) {
         Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
-        if (TrailingStop <= Gi_00013) {
-            Gi_00013     = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
-            TrailingStop = Gi_00013 + 1;
-        }
-        Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
-        if (Step <= Gi_00013) {
-            Gi_00013 = (int)MarketInfo(_Symbol, MODE_STOPLEVEL);
-            Step     = Gi_00013 + 1;
-        }
-        Gi_00013 = (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
-        Gi_00015 = Gi_00013;
-        if (Gi_00013 == 0) {
-            Gb_00013 = true;
-        } else {
-            Gb_00016 = (OrdersTotal() < Gi_00015);
-            Gb_00013 = Gb_00016;
-        }
-        if (Gb_00013 != true) {
-            Li_FFFFC = 0;
-            return Li_FFFFC;
-        }
-        Id_00030 = (MarketInfo(_Symbol, MODE_MARGINREQUIRED) * 0.01);
-        Id_00038 = MarketInfo(_Symbol, MODE_MAXLOT);
-        Id_00040 = MarketInfo(_Symbol, MODE_MINLOT);
-        Id_00058 = NormalizeDouble((Ask - Bid), _Digits);
-        Ii_0002C = 33;
-        if (Ii_00018 < 33) {
-            Ii_00018 = 33;
-        }
-        if (Ii_0002C > TrailingStop) {
-            TrailingStop = Ii_0002C;
-        }
-        Id_00060 = Id_00058;
-        Ii_00028 = Ii_0001C;
-        ArrayResize(Id_00098, Ii_0001C, 0);
-        if (Ii_00028 != 0) {
-            Gi_00016 = Ii_00028;
-            ArrayFill(Id_00098, 0, Ii_00028, Id_00060);
-        }
-        Id_00068 = NormalizeDouble((Max_Spread * _Point), _Digits);
-        Li_FFFEC = 0;
-        Li_FFFE8 = 0;
-        Li_FFFE4 = 0;
-        func_1011();
-        Li_FFFE0 = 0;
-        Li_FFFDC = 0;
-        if (OrdersTotal() > 0) {
-            do {
-                Ii_00024 = OrderSelect(Li_FFFDC, SELECT_BY_POS, MODE_TRADES);
-                if (OrderSymbol() == _Symbol && OrderMagicNumber() == Magic) {
-                    Li_FFFE0   = Li_FFFE0 + 1;
-                    returned_i = OrderType();
-                    if (returned_i <= 5) {
-                        if (returned_i == 4) {
+        Step     = Gi_00013 + 1;
+    }
+    Gi_00013 = (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
+    Gi_00015 = Gi_00013;
+    if (Gi_00013 <= 0) {
+        Gb_00013 = true;
+    } else {
+        Gb_00016 = (OrdersTotal() < Gi_00015);
+        Gb_00013 = Gb_00016;
+    }
+    if (Gb_00013 != true) {
+        Li_FFFFC = 0;
+        return Li_FFFFC;
+    }
+    Id_00030 = (MarketInfo(_Symbol, MODE_MARGINREQUIRED) * 0.01);
+    Id_00038 = MarketInfo(_Symbol, MODE_MAXLOT);
+    Id_00040 = MarketInfo(_Symbol, MODE_MINLOT);
+    Id_00058 = NormalizeDouble((Ask - Bid), _Digits);
+    Ii_0002C = 33;
+    if (Ii_00018 < 33) {
+        Ii_00018 = 33;
+    }
+    if (Ii_0002C > TrailingStop) {
+        TrailingStop = Ii_0002C;
+    }
+    Id_00060 = Id_00058;
+    Ii_00028 = Ii_0001C;
+    ArrayResize(Id_00098, Ii_0001C, 0);
+    if (Ii_00028 != 0) {
+        Gi_00016 = Ii_00028;
+        ArrayFill(Id_00098, 0, Ii_00028, Id_00060);
+    }
+    Id_00068 = NormalizeDouble((Max_Spread * _Point), _Digits);
+    Li_FFFEC = 0;
+    Li_FFFE8 = 0;
+    Li_FFFE4 = 0;
+    func_1011();
+    Li_FFFE0 = 0;
+    Li_FFFDC = 0;
+    if (OrdersTotal() > 0) {
+        do {
+            Ii_00024 = OrderSelect(Li_FFFDC, SELECT_BY_POS, MODE_TRADES);
+            if (OrderSymbol() == _Symbol && OrderMagicNumber() == Magic) {
+                Li_FFFE0   = Li_FFFE0 + 1;
+                returned_i = OrderType();
+                if (returned_i <= 5) {
+                    if (returned_i == 4) {
 
-                            Gi_00017 = (int)TimeCurrent();
-                            Gi_00017 = Gi_00017 - Ii_00184;
-                            if (Gi_00017 > Acceleration && (Id_00078 < (_Point * 70))) {
-                                Ii_00024 = OrderDelete(OrderTicket(), clrGray);
-                            }
-                            Li_FFFEC = Li_FFFEC + 1;
+                        Gi_00017 = (int)TimeCurrent();
+                        Gi_00017 = Gi_00017 - Ii_00184;
+                        if (Gi_00017 > Acceleration && (Id_00078 < (_Point * 70))) {
+                            Ii_00024 = OrderDelete(OrderTicket(), clrGray);
                         }
-                        if (returned_i == 5) {
+                        Li_FFFEC = Li_FFFEC + 1;
+                    }
+                    if (returned_i == 5) {
 
-                            Gi_00017 = (int)TimeCurrent();
-                            Gi_00017 = Gi_00017 - Ii_00188;
-                            if (Gi_00017 > Acceleration && (Id_00078 > (_Point * -70))) {
-                                Ii_00024 = OrderDelete(OrderTicket(), clrGray);
-                            }
-                            Li_FFFE8 = Li_FFFE8 + 1;
+                        Gi_00017 = (int)TimeCurrent();
+                        Gi_00017 = Gi_00017 - Ii_00188;
+                        if (Gi_00017 > Acceleration && (Id_00078 > (_Point * -70))) {
+                            Ii_00024 = OrderDelete(OrderTicket(), clrGray);
                         }
-                        if (returned_i == 0) {
+                        Li_FFFE8 = Li_FFFE8 + 1;
+                    }
+                    if (returned_i == 0) {
 
-                            Gd_00017 = AccountEquity();
-                            Gd_00017 = (Gd_00017 / AccountBalance());
-                            if (AccountEquity() > Id_00190 || (Gd_00017 < (StopLoss / 100))) {
+                        Gd_00017 = AccountEquity();
+                        Gd_00017 = (Gd_00017 / AccountBalance());
+                        if (AccountEquity() > Id_00190 || (Gd_00017 < (StopLoss / 100))) {
 
-                                if ((Id_00078 < (_Point * -70))) {
-                                    Gd_00017 = (_Point * 60);
-                                    if ((Bid < (OrderOpenPrice() - Gd_00017))) {
-                                        Gd_00017 = (Bid - OrderStopLoss());
+                            if ((Id_00078 < (_Point * -70))) {
+                                Gd_00017 = (_Point * 60);
+                                if ((Bid < (OrderOpenPrice() - Gd_00017))) {
+                                    Gd_00017 = (Bid - OrderStopLoss());
+                                    Gd_00018 = ((TrailingStop * _Point) * 150);
+                                    if (OrderStopLoss() == 0 || (Gd_00017 > ((Ii_0002C * _Point) + Gd_00018))) {
+
                                         Gd_00018 = ((TrailingStop * _Point) * 150);
-                                        if (OrderStopLoss() == 0 || (Gd_00017 > ((Ii_0002C * _Point) + Gd_00018))) {
-
-                                            Gd_00018 = ((TrailingStop * _Point) * 150);
-                                            Gd_00018 = NormalizeDouble((Bid - Gd_00018), _Digits);
-                                            if ((Gd_00018 != OrderStopLoss())) {
-                                                Gd_00019 = (TrailingStop * _Point);
-                                                Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble((Bid - Gd_00019), _Digits), OrderTakeProfit(), 0, clrGray);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (returned_i == 1) {
-
-                            Gd_0001B = AccountEquity();
-                            Gd_0001B = (Gd_0001B / AccountBalance());
-                            if (AccountEquity() > Id_00190 || (Gd_0001B < (StopLoss / 100))) {
-
-                                if ((Id_00078 > (_Point * 70)) && (Ask > ((_Point * 60) + OrderOpenPrice()))) {
-                                    Gd_0001B = (OrderStopLoss() - Ask);
-                                    Gd_0001C = ((TrailingStop * _Point) * 150);
-                                    if (OrderStopLoss() == 0 || (Gd_0001B > ((Ii_0002C * _Point) + Gd_0001C))) {
-
-                                        Gd_0001C = NormalizeDouble((((TrailingStop * _Point) * 150) + Ask), _Digits);
-                                        if ((Gd_0001C != OrderStopLoss())) {
-                                            Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble(((TrailingStop * _Point) + Ask), _Digits), OrderTakeProfit(), 0, clrGray);
+                                        Gd_00018 = NormalizeDouble((Bid - Gd_00018), _Digits);
+                                        if ((Gd_00018 != OrderStopLoss())) {
+                                            Gd_00019 = (TrailingStop * _Point);
+                                            Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble((Bid - Gd_00019), _Digits), OrderTakeProfit(), 0, clrGray);
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    if (returned_i == 1) {
+
+                        Gd_0001B = AccountEquity();
+                        Gd_0001B = (Gd_0001B / AccountBalance());
+                        if (AccountEquity() > Id_00190 || (Gd_0001B < (StopLoss / 100))) {
+
+                            if ((Id_00078 > (_Point * 70)) && (Ask > ((_Point * 60) + OrderOpenPrice()))) {
+                                Gd_0001B = (OrderStopLoss() - Ask);
+                                Gd_0001C = ((TrailingStop * _Point) * 150);
+                                if (OrderStopLoss() == 0 || (Gd_0001B > ((Ii_0002C * _Point) + Gd_0001C))) {
+
+                                    Gd_0001C = NormalizeDouble((((TrailingStop * _Point) * 150) + Ask), _Digits);
+                                    if ((Gd_0001C != OrderStopLoss())) {
+                                        Ii_00024 = OrderModify(OrderTicket(), OrderOpenPrice(), NormalizeDouble(((TrailingStop * _Point) + Ask), _Digits), OrderTakeProfit(), 0, clrGray);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                Li_FFFDC = Li_FFFDC + 1;
-            } while (Li_FFFDC < OrdersTotal());
-        }
-        Ld_FFFC8 = 0;
-        Ld_FFFC0 = 100000;
-        Ld_FFFB8 = 0;
-        double totalOpenLots = 0;
-        Li_FFFB4 = OrdersTotal() - 1;
-        if (Li_FFFB4 >= 0) {
+            }
+            Li_FFFDC = Li_FFFDC + 1;
+        } while (Li_FFFDC < OrdersTotal());
+    }
+    Ld_FFFC8 = 0;
+    Ld_FFFC0 = 100000;
+    Ld_FFFB8 = 0;
+    double totalOpenLots = 0;
+    Li_FFFB4 = OrdersTotal() - 1;
+    if (Li_FFFB4 >= 0) {
+        do {
+            Li_FFFB0 = OrderSelect(Li_FFFB4, SELECT_BY_POS, MODE_TRADES);
+            if (OrderMagicNumber() == Magic) {
+                Ld_FFFC8 = (Ld_FFFC8 + OrderProfit() + OrderSwap() + OrderCommission());
+                if (OrderType() == OP_BUY || OrderType() == OP_SELL) {
+                    totalOpenLots += OrderLots();
+                }
+            }
+            if (OrderMagicNumber() == Magic && (OrderOpenPrice() < Ld_FFFC0)) {
+                Ld_FFFC0 = OrderOpenPrice();
+            }
+            if (OrderMagicNumber() == Magic && (OrderOpenPrice() > Ld_FFFB8)) {
+                Ld_FFFB8 = OrderOpenPrice();
+            }
+            Li_FFFB4 = Li_FFFB4 - 1;
+        } while (Li_FFFB4 >= 0);
+    }
+    Ld_FFFD0 = 1.0; // Close at $1.00 profit per user specification
+
+    if ((Ld_FFFC8 > Ld_FFFD0)) {
+        Li_FFFAC = OrdersTotal() - 1;
+        if (Li_FFFAC >= 0) {
             do {
-                Li_FFFB0 = OrderSelect(Li_FFFB4, SELECT_BY_POS, MODE_TRADES);
-                if (OrderMagicNumber() == Magic) {
-                    Ld_FFFC8 = (Ld_FFFC8 + OrderProfit() + OrderSwap() + OrderCommission());
-                    if (OrderType() == OP_BUY || OrderType() == OP_SELL) {
-                        totalOpenLots += OrderLots();
-                    }
+                Li_FFFA8 = OrderSelect(Li_FFFAC, SELECT_BY_POS, MODE_TRADES);
+                if (OrderType() == OP_SELL && OrderMagicNumber() == Magic) {
+                    Li_FFFA4 = OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrGray);
                 }
-                if (OrderMagicNumber() == Magic && (OrderOpenPrice() < Ld_FFFC0)) {
-                    Ld_FFFC0 = OrderOpenPrice();
+                if (OrderType() == OP_BUY && OrderMagicNumber() == Magic) {
+                    Li_FFFA0 = OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrGray);
                 }
-                if (OrderMagicNumber() == Magic && (OrderOpenPrice() > Ld_FFFB8)) {
-                    Ld_FFFB8 = OrderOpenPrice();
-                }
-                Li_FFFB4 = Li_FFFB4 - 1;
-            } while (Li_FFFB4 >= 0);
+                Li_FFFAC = Li_FFFAC - 1;
+            } while (Li_FFFAC >= 0);
         }
-        if (totalOpenLots <= 0) totalOpenLots = LotsCalculation();
-        Ld_FFFD0 = (totalOpenLots / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+    }
 
-        if ((Ld_FFFC8 > Ld_FFFD0)) {
-            Li_FFFAC = OrdersTotal() - 1;
-            if (Li_FFFAC >= 0) {
-                do {
-                    Li_FFFA8 = OrderSelect(Li_FFFAC, SELECT_BY_POS, MODE_TRADES);
-                    if (OrderType() == OP_SELL && OrderMagicNumber() == Magic) {
-                        Li_FFFA4 = OrderClose(OrderTicket(), OrderLots(), Ask, 3, clrGray);
-                    }
-                    if (OrderType() == OP_BUY && OrderMagicNumber() == Magic) {
-                        Li_FFFA0 = OrderClose(OrderTicket(), OrderLots(), Bid, 3, clrGray);
-                    }
-                    Li_FFFAC = Li_FFFAC - 1;
-                } while (Li_FFFAC >= 0);
+    // SAR Breakout Entry Strategy (executed in both LIVE and Tester mode)
+    if (Li_FFFE0 < Ii_00014) {
+        double sarVal = iSAR(NULL, 0, Sar_period, 0.2, 0);
+        Gd_00023 = (Step * _Point);
+        double checkBuy = (sarVal - Gd_00023);
+        if ((checkBuy > Close[0]) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
+            double lots = LotsCalculation();
+            if (!InvertSignals) {
+                double price = ((Step * _Point) + Ask);
+                double sl = price - (StopLoss * _Point);
+                Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+            } else {
+                double price = (Bid - (Step * _Point));
+                double sl = price + (StopLoss * _Point);
+                Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
             }
+            Ii_00184 = (int)TimeCurrent();
         }
-        if (Li_FFFE0 < Ii_00014) {
-            if ((Id_00078 > (_Point * 60))) {
-                Gd_00023 = (Step * _Point);
-                Gd_00023 = (iSAR(NULL, 0, Sar_period, 0.2, 0) - Gd_00023);
-                if ((Gd_00023 > Close[0]) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
-                    double lots = LotsCalculation();
-                    if (!InvertSignals) {
-                        double price = ((Step * _Point) + Ask);
-                        double sl = price - (StopLoss * _Point);
-                        Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
-                    } else {
-                        double price = (Bid - (Step * _Point));
-                        double sl = price + (StopLoss * _Point);
-                        Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
-                    }
-                    Ii_00184 = (int)TimeCurrent();
+
+        Gd_00027 = ((Step * _Point) + sarVal);
+        if (Gd_00027 < Close[0]) {
+            Gd_00027 = (Step * _Point);
+            if ((Bid - Gd_00027) > Ld_FFFB8) {
+                Gd_0002C = (Step * _Point);
+                double lots = LotsCalculation();
+                if (!InvertSignals) {
+                    double price = (Bid - Gd_0002C);
+                    double sl = price + (StopLoss * _Point);
+                    Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                } else {
+                    double price = ((Step * _Point) + Ask);
+                    double sl = price - (StopLoss * _Point);
+                    Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
                 }
-            }
-            if ((Id_00078 < (_Point * -60))) {
-                Gd_00027 = ((Step * _Point) + iSAR(NULL, 0, Sar_period, 0.2, 0));
-                if ((Gd_00027 < Close[0])) {
-                    Gd_00027 = (Step * _Point);
-                    if (((Bid - Gd_00027) > Ld_FFFB8)) {
-                        Gd_0002C = (Step * _Point);
-                        double lots = LotsCalculation();
-                        if (!InvertSignals) {
-                            double price = (Bid - Gd_0002C);
-                            double sl = price + (StopLoss * _Point);
-                            Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
-                        } else {
-                            double price = ((Step * _Point) + Ask);
-                            double sl = price - (StopLoss * _Point);
-                            Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
-                        }
-                        Ii_00188 = (int)TimeCurrent();
-                    }
-                }
+                Ii_00188 = (int)TimeCurrent();
             }
         }
     }
-    if (IsTesting()) return 0;
 
+    // Bollinger Bands Entry Strategy
     Ld_FFF98 = 0;
     Ld_FFF90 = 1.79769313486232E+308;
     Ld_FFF88 = -1.79769313486232E+308;
@@ -1293,8 +1157,7 @@ int start()
             Li_FFF80 = Li_FFF80 - 1;
         } while (Li_FFF80 >= 0);
     }
-    if (openLotsBollinger <= 0) openLotsBollinger = LotsCalculation();
-    double targetProfitBollinger = (openLotsBollinger / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+    double targetProfitBollinger = 1.0; // Close at $1.00 profit per user specification
 
     if ((Ld_FFF98 > targetProfitBollinger)) {
         Li_FFF78 = OrdersTotal() - 1;
@@ -1364,7 +1227,7 @@ int start()
         }
     }
     Gd_0003A = (_Point * 50);
-    if (((Bid - Gd_0003A) > Id_00190)) {
+    if (((Bid - Gd_0003A) > Ld_FFF88)) {
         if (Li_FFF84 == 0 || Li_FFF84 == -1) {
             Gd_0003C = (_Point * 30);
             double lots = LotsCalculation();

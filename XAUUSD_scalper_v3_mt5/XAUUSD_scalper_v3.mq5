@@ -961,7 +961,7 @@ void OnTick()
 
     Gi_00013 = (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
     Gi_00015 = Gi_00013;
-    if (Gi_00013 == 0) {
+    if (Gi_00013 <= 0) {
         Gb_00013 = true;
     } else {
         Gb_00013 = ((PositionsTotal() + OrdersTotal()) < Gi_00015);
@@ -1052,16 +1052,17 @@ void OnTick()
     }
 
     int Li_FFFE0 = 0;
-    double Ld_FFFD0 = (Lots * 200);
     double Ld_FFFC8 = 0;
     double Ld_FFFC0 = 100000.0;
     double Ld_FFFB8 = 0.0;
+    double totalOpenLots = 0.0;
 
     for (int i = PositionsTotal() - 1; i >= 0; i--) {
         ulong ticket = PositionGetTicket(i);
         if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
             Li_FFFE0++;
             Ld_FFFC8 += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+            totalOpenLots += PositionGetDouble(POSITION_VOLUME);
             double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
             if (openPrice < Ld_FFFC0) Ld_FFFC0 = openPrice;
             if (openPrice > Ld_FFFB8) Ld_FFFB8 = openPrice;
@@ -1077,6 +1078,9 @@ void OnTick()
         }
     }
 
+    if (totalOpenLots <= 0) totalOpenLots = LotsCalculation();
+    double Ld_FFFD0 = (totalOpenLots / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+
     if (Ld_FFFC8 > Ld_FFFD0) {
         for (int i = PositionsTotal() - 1; i >= 0; i--) {
             ulong ticket = PositionGetTicket(i);
@@ -1088,57 +1092,55 @@ void OnTick()
 
     // First Entry Strategy: SAR Breakout
     if (Li_FFFE0 < Ii_00014) {
-        if (Id_00078 > (_Point * 60)) {
-            Gd_00023 = (Step * _Point);
-            Gd_00023 = (GetSAR(0) - Gd_00023);
-            if ((Gd_00023 > Close0) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
+        double sarVal = GetSAR(0);
+        Gd_00023 = (Step * _Point);
+        double checkBuy = (sarVal - Gd_00023);
+        if ((checkBuy > Close0) && (((Step * _Point) + Ask) < Ld_FFFC0)) {
+            double lots = LotsCalculation();
+            if (!InvertSignals) {
+                double price = ((Step * _Point) + Ask);
+                double sl = price - (StopLoss * _Point);
+                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+            } else {
+                double price = (Bid - (Step * _Point));
+                double sl = price + (StopLoss * _Point);
+                trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+            }
+            Ii_00184 = (int)TimeCurrent();
+        }
+
+        Gd_00027 = ((Step * _Point) + sarVal);
+        if (Gd_00027 < Close0) {
+            Gd_00027 = (Step * _Point);
+            if ((Bid - Gd_00027) > Ld_FFFB8) {
+                Gd_0002C = (Step * _Point);
                 double lots = LotsCalculation();
                 if (!InvertSignals) {
+                    double price = (Bid - Gd_0002C);
+                    double sl = price + (StopLoss * _Point);
+                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                } else {
                     double price = ((Step * _Point) + Ask);
                     double sl = price - (StopLoss * _Point);
                     trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
-                } else {
-                    double price = (Bid - (Step * _Point));
-                    double sl = price + (StopLoss * _Point);
-                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
                 }
-                Ii_00184 = (int)TimeCurrent();
-            }
-        }
-        if (Id_00078 < (_Point * -60)) {
-            Gd_00027 = ((Step * _Point) + GetSAR(0));
-            if (Gd_00027 < Close0) {
-                Gd_00027 = (Step * _Point);
-                if ((Bid - Gd_00027) > Ld_FFFB8) {
-                    Gd_0002C = (Step * _Point);
-                    double lots = LotsCalculation();
-                    if (!InvertSignals) {
-                        double price = (Bid - Gd_0002C);
-                        double sl = price + (StopLoss * _Point);
-                        trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
-                    } else {
-                        double price = ((Step * _Point) + Ask);
-                        double sl = price - (StopLoss * _Point);
-                        trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
-                    }
-                    Ii_00188 = (int)TimeCurrent();
-                }
+                Ii_00188 = (int)TimeCurrent();
             }
         }
     }
-
-    if (MQLInfoInteger(MQL_TESTER)) return;
 
     // Second Entry Strategy: Bollinger Bands Channel Bounce
     double Ld_FFF98 = 0;
     double Ld_FFF90 = 1.79769313486232E+308;
     double Ld_FFF88 = -1.79769313486232E+308;
     int    Li_FFF84 = 0;
+    double openLotsBollinger = 0.0;
 
     for (int i = PositionsTotal() - 1; i >= 0; i--) {
         ulong ticket = PositionGetTicket(i);
         if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
             Ld_FFF98 += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+            openLotsBollinger += PositionGetDouble(POSITION_VOLUME);
             double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
             if (openPrice < Ld_FFF90) Ld_FFF90 = openPrice;
             if (openPrice > Ld_FFF88) Ld_FFF88 = openPrice;
@@ -1158,7 +1160,10 @@ void OnTick()
         }
     }
 
-    if (Ld_FFF98 > 3) {
+    if (openLotsBollinger <= 0) openLotsBollinger = LotsCalculation();
+    double targetProfitBollinger = (openLotsBollinger / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+
+    if (Ld_FFF98 > targetProfitBollinger) {
         for (int i = PositionsTotal() - 1; i >= 0; i--) {
             ulong ticket = PositionGetTicket(i);
             if (ticket > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic) {
