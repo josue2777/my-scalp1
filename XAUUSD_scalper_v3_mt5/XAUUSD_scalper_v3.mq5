@@ -47,9 +47,9 @@ enum enum_lot_mode {
 
 input group "== Volume Calculation =="
 input string        tvolumen    = "== Volume Calculation ==";
-input enum_lot_mode lot_mode    = lot_account_percent; // Lot Calculation Mode
+input enum_lot_mode lot_mode    = lot_fix;             // Lot Calculation Mode (Fixed Lot)
 input double        RiskPercent = 1.0;                // Risk Percent (% of capital per trade)
-input double        uLotsValue  = 1.0;                // Fixed Lot Value or Money Amount
+input double        uLotsValue  = 0.03;               // Fixed Lot Size = 0.03
 input double        uRange      = 100000;
 
 #endif
@@ -1078,8 +1078,7 @@ void OnTick()
         }
     }
 
-    if (totalOpenLots <= 0) totalOpenLots = LotsCalculation();
-    double Ld_FFFD0 = (totalOpenLots / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+    double Ld_FFFD0 = 1.0; // Close at $1.00 profit per user specification
 
     if (Ld_FFFC8 > Ld_FFFD0) {
         for (int i = PositionsTotal() - 1; i >= 0; i--) {
@@ -1160,8 +1159,7 @@ void OnTick()
         }
     }
 
-    if (openLotsBollinger <= 0) openLotsBollinger = LotsCalculation();
-    double targetProfitBollinger = (openLotsBollinger / 0.01) * 3.0; // Proportional profit target ($3 per 0.01 lot)
+    double targetProfitBollinger = 1.0; // Close at $1.00 profit per user specification
 
     if (Ld_FFF98 > targetProfitBollinger) {
         for (int i = PositionsTotal() - 1; i >= 0; i--) {
