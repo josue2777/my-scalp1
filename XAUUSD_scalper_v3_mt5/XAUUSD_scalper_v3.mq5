@@ -18,7 +18,8 @@ input bool   InvertSignals   = true;  // Invert Buy/Sell signals
 input double Sar_period      = 0.56;
 input int    InpStep         = 35;   // Step
 input int    Acceleration    = 7;
-input int    InpTrailingStop = 250;  // TrailingStop
+input int    InpTrailingStop = 750;  // TrailingStop 750 points
+input int    TakeProfit      = 1000; // TakeProfit 1000 points
 input int    StopLoss        = 250;
 input int    Max_Spread      = 200;
 input ulong  Magic           = 1111111;
@@ -1099,11 +1100,13 @@ void OnTick()
             if (!InvertSignals) {
                 double price = ((Step * _Point) + Ask);
                 double sl = price - (StopLoss * _Point);
-                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                trade.BuyStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, Is_00008);
             } else {
                 double price = (Bid - (Step * _Point));
                 double sl = price + (StopLoss * _Point);
-                trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                trade.SellStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, Is_00008);
             }
             Ii_00184 = (int)TimeCurrent();
         }
@@ -1117,11 +1120,13 @@ void OnTick()
                 if (!InvertSignals) {
                     double price = (Bid - Gd_0002C);
                     double sl = price + (StopLoss * _Point);
-                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                    double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                    trade.SellStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, Is_00008);
                 } else {
                     double price = ((Step * _Point) + Ask);
                     double sl = price - (StopLoss * _Point);
-                    trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, Is_00008);
+                    double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                    trade.BuyStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, Is_00008);
                 }
                 Ii_00188 = (int)TimeCurrent();
             }
@@ -1194,11 +1199,13 @@ void OnTick()
                 if (!InvertSignals) {
                     double price = ((_Point * 30) + Ask);
                     double sl = price - (StopLoss * _Point);
-                    trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                    double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                    trade.BuyStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "3782");
                 } else {
                     double price = (Bid - (_Point * 30));
                     double sl = price + (StopLoss * _Point);
-                    trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                    double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                    trade.SellStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "3782");
                 }
             }
         }
@@ -1229,11 +1236,13 @@ void OnTick()
             if (!InvertSignals) {
                 double price = (Bid - Gd_0003C);
                 double sl = price + (StopLoss * _Point);
-                trade.SellStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                trade.SellStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "3782");
             } else {
                 double price = ((_Point * 30) + Ask);
                 double sl = price - (StopLoss * _Point);
-                trade.BuyStop(lots, price, _Symbol, sl, 0, ORDER_TIME_GTC, 0, "3782");
+                double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                trade.BuyStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, "3782");
             }
         }
     }

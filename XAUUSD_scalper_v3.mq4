@@ -33,7 +33,8 @@ extern bool InvertSignals = true;  // Invert Buy/Sell signals
 extern double Sar_period   = 0.56;
 extern int    Step         = 35;
 extern int    Acceleration = 7;
-extern int    TrailingStop = 250;
+extern int    TrailingStop = 750;  // TrailingStop 750 points
+extern int    TakeProfit   = 1000; // TakeProfit 1000 points
 extern int    StopLoss     = 250;
 extern int    Max_Spread   = 200;
 extern int    Magic        = 1111111;
@@ -1091,11 +1092,13 @@ int start()
             if (!InvertSignals) {
                 double price = ((Step * _Point) + Ask);
                 double sl = price - (StopLoss * _Point);
-                Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, tp, Is_00008, Magic, 0, clrGray);
             } else {
                 double price = (Bid - (Step * _Point));
                 double sl = price + (StopLoss * _Point);
-                Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, tp, Is_00008, Magic, 0, clrGray);
             }
             Ii_00184 = (int)TimeCurrent();
         }
@@ -1109,11 +1112,13 @@ int start()
                 if (!InvertSignals) {
                     double price = (Bid - Gd_0002C);
                     double sl = price + (StopLoss * _Point);
-                    Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                    double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                    Li_FFFE4 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, tp, Is_00008, Magic, 0, clrGray);
                 } else {
                     double price = ((Step * _Point) + Ask);
                     double sl = price - (StopLoss * _Point);
-                    Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, Is_00008, Magic, 0, clrGray);
+                    double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                    Li_FFFE4 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, tp, Is_00008, Magic, 0, clrGray);
                 }
                 Ii_00188 = (int)TimeCurrent();
             }
@@ -1200,11 +1205,13 @@ int start()
                 if (!InvertSignals) {
                     double price = ((_Point * 30) + Ask);
                     double sl = price - (StopLoss * _Point);
-                    Li_FFF54 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+                    double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                    Li_FFF54 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, tp, "3782", Magic, 0, clrGray);
                 } else {
                     double price = (Bid - (_Point * 30));
                     double sl = price + (StopLoss * _Point);
-                    Li_FFF54 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+                    double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                    Li_FFF54 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, tp, "3782", Magic, 0, clrGray);
                 }
             }
         }
@@ -1234,11 +1241,13 @@ int start()
             if (!InvertSignals) {
                 double price = (Bid - Gd_0003C);
                 double sl = price + (StopLoss * _Point);
-                Li_FFF44 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+                double tp = (TakeProfit > 0) ? (price - (TakeProfit * _Point)) : 0;
+                Li_FFF44 = OrderSend(_Symbol, OP_SELLSTOP, lots, price, Ii_00020, sl, tp, "3782", Magic, 0, clrGray);
             } else {
                 double price = ((_Point * 30) + Ask);
                 double sl = price - (StopLoss * _Point);
-                Li_FFF44 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, 0, "3782", Magic, 0, clrGray);
+                double tp = (TakeProfit > 0) ? (price + (TakeProfit * _Point)) : 0;
+                Li_FFF44 = OrderSend(_Symbol, OP_BUYSTOP, lots, price, Ii_00020, sl, tp, "3782", Magic, 0, clrGray);
             }
         }
     }
