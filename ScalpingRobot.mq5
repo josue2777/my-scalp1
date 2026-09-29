@@ -25,8 +25,10 @@ input double TP2_Level     = 0.5;        // TP2 (%)
 input int    StopLossPts   = 500;        // Initial Stop Loss (points)
 
 input group "=== Exit Rules ==="
-input int    MaxCandleAge         = 20;  // Max candles before closing position (0 to disable)
-input int    SameTypePosThreshold = 6;   // Same-type position count threshold for profit exit
+input int    MaxCandleAge         = 20;   // Max candles before closing position (0 to disable)
+input int    SameTypePosThreshold = 6;    // Same-type position count threshold for profit exit
+input double MaxBasketLossUSD     = 50.0; // Max basket loss in account currency (0.0 to disable)
+input double MaxBasketLossPct     = 0.0;  // Max basket loss in % of account balance (0.0 to disable)
 
 input group "=== Telegram Settings ==="
 input string TelegramToken = "7801637901:AAHAoFEk3eXcOneF5hpy6FIAuD3R_clEAtw";
@@ -265,6 +267,27 @@ void ManagePositionExits()
             {
                 if(pos.PositionType() == POSITION_TYPE_SELL)
                     trade.PositionClose(pos.Ticket());
+            }
+        }
+    }
+
+    // 3. Close positions if Max Basket Loss limit is reached ($ or %)
+    double totalNetProfit = buyProfit + sellProfit;
+    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+
+    bool lossLimitExceeded = false;
+    if(MaxBasketLossUSD > 0.0 && totalNetProfit <= -MaxBasketLossUSD)
+        lossLimitExceeded = true;
+    if(MaxBasketLossPct > 0.0 && balance > 0.0 && totalNetProfit <= -(balance * MaxBasketLossPct / 100.0))
+        lossLimitExceeded = true;
+
+    if(lossLimitExceeded)
+    {
+        for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+            if(pos.SelectByIndex(i) && pos.Magic() == 777 && pos.Symbol() == _Symbol)
+            {
+                trade.PositionClose(pos.Ticket());
             }
         }
     }

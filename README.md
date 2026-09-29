@@ -26,6 +26,8 @@ Ce projet est une version hautement améliorée d'un Expert Advisor (EA) MetaTra
 - **Expiration :** Licencié jusqu'au 08/04/2026.
 - **MaxCandleAge :** Nombre maximum de bougies du timeframe actuel avant fermeture automatique de la position (par défaut : 20).
 - **SameTypePosThreshold :** Seuil de positions du même type (Buy/Sell) au-delà duquel les positions sont fermées dès que leur profit total est positif (par défaut : 6).
+- **MaxBasketLossUSD :** Perte maximale tolérée pour le panier de positions en devise du compte avant fermeture complète (par défaut : 50.0).
+- **MaxBasketLossPct :** Perte maximale tolérée pour le panier en % du capital avant fermeture complète (par défaut : 0.0 pour désactiver).
 
 ## Commandes Telegram
 Envoyez ces messages à votre bot Telegram pour le piloter :
