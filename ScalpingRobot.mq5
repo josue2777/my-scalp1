@@ -24,6 +24,10 @@ input double TP1_Level     = 0.2;        // TP1 (%)
 input double TP2_Level     = 0.5;        // TP2 (%)
 input int    StopLossPts   = 500;        // Initial Stop Loss (points)
 
+input group "=== Exit Rules ==="
+input int    MaxCandleAge         = 20;  // Max candles before closing position (0 to disable)
+input int    SameTypePosThreshold = 6;   // Same-type position count threshold for profit exit
+
 input group "=== Telegram Settings ==="
 input string TelegramToken = "7801637901:AAHAoFEk3eXcOneF5hpy6FIAuD3R_clEAtw";
 input string TelegramChatID = "7505313544";
@@ -141,6 +145,9 @@ void OnTick()
         }
     }
 
+    // 4. Custom Exit Rules (Candle Expiration & Same-Type Profit Exit)
+    ManagePositionExits();
+
     UpdateDashboard();
 }
 
@@ -190,6 +197,75 @@ void CloseCounterTrades(int trend)
             if((trend == 1 && pos.PositionType() == POSITION_TYPE_SELL) ||
                (trend == -1 && pos.PositionType() == POSITION_TYPE_BUY))
                 trade.PositionClose(pos.Ticket());
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Logic - Custom Exit Rules                                         |
+//+------------------------------------------------------------------+
+void ManagePositionExits()
+{
+    // 1. Close positions exceeding MaxCandleAge
+    if(MaxCandleAge > 0)
+    {
+        for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+            if(pos.SelectByIndex(i) && pos.Magic() == 777 && pos.Symbol() == _Symbol)
+            {
+                int ageInCandles = iBarShift(_Symbol, _Period, pos.Time());
+                if(ageInCandles >= MaxCandleAge)
+                {
+                    trade.PositionClose(pos.Ticket());
+                }
+            }
+        }
+    }
+
+    // 2. Close same-type positions if count > SameTypePosThreshold and total net profit > 0
+    int buyCount = 0, sellCount = 0;
+    double buyProfit = 0.0, sellProfit = 0.0;
+
+    for(int i = 0; i < PositionsTotal(); i++)
+    {
+        if(pos.SelectByIndex(i) && pos.Magic() == 777 && pos.Symbol() == _Symbol)
+        {
+            if(pos.PositionType() == POSITION_TYPE_BUY)
+            {
+                buyCount++;
+                buyProfit += pos.Profit() + pos.Swap();
+            }
+            else if(pos.PositionType() == POSITION_TYPE_SELL)
+            {
+                sellCount++;
+                sellProfit += pos.Profit() + pos.Swap();
+            }
+        }
+    }
+
+    // Check BUY side
+    if(buyCount > SameTypePosThreshold && buyProfit > 0)
+    {
+        for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+            if(pos.SelectByIndex(i) && pos.Magic() == 777 && pos.Symbol() == _Symbol)
+            {
+                if(pos.PositionType() == POSITION_TYPE_BUY)
+                    trade.PositionClose(pos.Ticket());
+            }
+        }
+    }
+
+    // Check SELL side
+    if(sellCount > SameTypePosThreshold && sellProfit > 0)
+    {
+        for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+            if(pos.SelectByIndex(i) && pos.Magic() == 777 && pos.Symbol() == _Symbol)
+            {
+                if(pos.PositionType() == POSITION_TYPE_SELL)
+                    trade.PositionClose(pos.Ticket());
+            }
         }
     }
 }
