@@ -22,6 +22,7 @@ Ce projet est une version hautement améliorée d'un Expert Advisor (EA) MetaTra
 ## Paramètres Clés
 
 - **RiskPercent :** Fixé à 3% par défaut pour une gestion saine.
+- **InvertSignals :** Inverse les signaux d'achat et de vente (Reverse Trading, par défaut : `true`).
 - **TradeComment :** "GOAT BUY/SELL" pour un suivi précis.
 - **Expiration :** Licencié jusqu'au 08/04/2026.
 - **MaxCandleAge :** Nombre maximum de bougies du timeframe actuel avant fermeture automatique de la position (par défaut : 20).

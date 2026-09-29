@@ -17,6 +17,7 @@ input double Multiplier    = 1.5;        // ATR Multiplier
 input int    EMA_Period    = 9;          // EMA Trend Filter Period
 input int    MaxPositions  = 10;         // Max concurrent positions
 input double RiskPercent   = 1.0;        // Risk per trade %
+input bool   InvertSignals = true;       // Invert Buy/Sell signals (Reverse trading)
 input string Expiration    = "2026.12.31";
 
 input group "=== Take Profit Levels (%) ==="
@@ -184,20 +185,22 @@ void CalculateSupertrend(double closePrice, double atr, int &trend, double &up, 
 
 void ExecuteGOATTrade(int sig, double price)
 {
-    double sl = (sig == 1) ? price - StopLossPts * _Point : price + StopLossPts * _Point;
-    double tp = (sig == 1) ? price + (price * (TP1_Level / 100)) : price - (price * (TP1_Level / 100));
+    int effSig = InvertSignals ? -sig : sig;
+    double sl = (effSig == 1) ? price - StopLossPts * _Point : price + StopLossPts * _Point;
+    double tp = (effSig == 1) ? price + (price * (TP1_Level / 100)) : price - (price * (TP1_Level / 100));
     double lot = CalcLots(MathAbs(price - sl));
 
-    if(sig == 1) trade.Buy(lot, _Symbol, price, sl, tp, "GOAT BUY");
+    if(effSig == 1) trade.Buy(lot, _Symbol, price, sl, tp, "GOAT BUY");
     else trade.Sell(lot, _Symbol, price, sl, tp, "GOAT SELL");
 }
 
 void CloseCounterTrades(int trend)
 {
+    int effTrend = InvertSignals ? -trend : trend;
     for(int i = PositionsTotal() - 1; i >= 0; i--) {
         if(pos.SelectByIndex(i) && pos.Magic() == 777 && pos.Symbol() == _Symbol) {
-            if((trend == 1 && pos.PositionType() == POSITION_TYPE_SELL) ||
-               (trend == -1 && pos.PositionType() == POSITION_TYPE_BUY))
+            if((effTrend == 1 && pos.PositionType() == POSITION_TYPE_SELL) ||
+               (effTrend == -1 && pos.PositionType() == POSITION_TYPE_BUY))
                 trade.PositionClose(pos.Ticket());
         }
     }
