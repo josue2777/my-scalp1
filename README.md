@@ -24,6 +24,8 @@ Ce projet est une version hautement améliorée d'un Expert Advisor (EA) MetaTra
 - **RiskPercent :** Fixé à 3% par défaut pour une gestion saine.
 - **TradeComment :** "GOAT BUY/SELL" pour un suivi précis.
 - **Expiration :** Licencié jusqu'au 08/04/2026.
+- **MaxCandleAge :** Nombre maximum de bougies du timeframe actuel avant fermeture automatique de la position (par défaut : 20).
+- **SameTypePosThreshold :** Seuil de positions du même type (Buy/Sell) au-delà duquel les positions sont fermées dès que leur profit total est positif (par défaut : 6).
 
 ## Commandes Telegram
 Envoyez ces messages à votre bot Telegram pour le piloter :
