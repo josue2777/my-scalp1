@@ -4,8 +4,8 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, TradingBot Pro"
 #property link      ""
-#property version   "1.00"
-#property description "Strategy based on fixed pending Buy Stop and Sell Stop orders with Break Even and Trailing Stop."
+#property version   "1.10"
+#property description "Strategy based on fixed pending Buy Stop and Sell Stop orders with Break Even, Trailing Stop, and 3% Risk Capital Management."
 
 #include <Trade/Trade.mqh>
 #include <Trade/PositionInfo.mqh>
@@ -14,7 +14,9 @@
 //--- Input Parameters
 input group "=== Strategy Settings ==="
 input ulong  MagicNumber            = 123456; // Magic Number
-input double LotSize                = 0.01;   // Lot Size
+input bool   UseAutoLot             = true;   // Calculate lot size based on capital risk %
+input double RiskPercent            = 3.0;    // Risk per cycle (% of Account Balance)
+input double FixedLotSize           = 0.01;   // Fixed Lot Size (used if UseAutoLot = false)
 input int    DistancePoints         = 20;     // Order Distance from Reference Price (points)
 input int    BreakEvenPoints        = 20;     // Break Even Trigger Profit (points)
 input int    TrailingStartPoints    = 30;     // Trailing Stop Trigger Profit (points)
@@ -139,6 +141,44 @@ void DeletePendingOrders()
 }
 
 //+------------------------------------------------------------------+
+//| Calculate Lot Size based on percentage of Account Capital        |
+//+------------------------------------------------------------------+
+double CalculateLotSize(int slPoints)
+{
+    if(!UseAutoLot)
+        return FixedLotSize;
+
+    if(slPoints <= 0)
+        return SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+
+    double balance   = AccountInfoDouble(ACCOUNT_BALANCE);
+    double riskMoney = balance * (RiskPercent / 100.0);
+    double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double pointVal  = _Point;
+
+    if(tickSize <= 0 || pointVal <= 0)
+        return SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+
+    double pointValuePerLot = (tickValue / tickSize) * pointVal;
+    if(pointValuePerLot <= 0)
+        return SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+
+    double calculatedLot = riskMoney / (slPoints * pointValuePerLot);
+
+    // Respect broker volume constraints
+    double minLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    double maxLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+
+    if(lotStep > 0)
+        calculatedLot = MathFloor(calculatedLot / lotStep) * lotStep;
+
+    calculatedLot = MathMax(minLot, MathMin(maxLot, calculatedLot));
+    return NormalizeDouble(calculatedLot, 2);
+}
+
+//+------------------------------------------------------------------+
 //| Start a new cycle by placing Buy Stop and Sell Stop              |
 //+------------------------------------------------------------------+
 void StartNewCycle()
@@ -158,8 +198,11 @@ void StartNewCycle()
     double buySL  = refPrice;
     double sellSL = refPrice;
 
-    trade.BuyStop(LotSize, buyStopPrice, _Symbol, buySL, 0);
-    trade.SellStop(LotSize, sellStopPrice, _Symbol, sellSL, 0);
+    // Calculer le lot selon le risque (3% du capital par défaut)
+    double lot = CalculateLotSize(DistancePoints);
+
+    trade.BuyStop(lot, buyStopPrice, _Symbol, buySL, 0);
+    trade.SellStop(lot, sellStopPrice, _Symbol, sellSL, 0);
 }
 
 //+------------------------------------------------------------------+
