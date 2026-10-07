@@ -4,8 +4,8 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, TradingBot Pro"
 #property link      ""
-#property version   "1.10"
-#property description "Strategy based on fixed pending Buy Stop and Sell Stop orders with Break Even, Trailing Stop, and 3% Risk Capital Management."
+#property version   "1.21"
+#property description "Strategy based on fixed pending Buy Stop and Sell Stop orders with Break Even, Trailing Stop, 3% Risk Management, and Candle Expiration."
 
 #include <Trade/Trade.mqh>
 #include <Trade/PositionInfo.mqh>
@@ -21,11 +21,13 @@ input int    DistancePoints         = 20;     // Order Distance from Reference P
 input int    BreakEvenPoints        = 20;     // Break Even Trigger Profit (points)
 input int    TrailingStartPoints    = 30;     // Trailing Stop Trigger Profit (points)
 input int    TrailingDistancePoints = 20;     // Trailing Stop Distance (points)
+input int    MaxCandlesPending      = 0;      // Refresh pending orders after N candles (0 = disabled)
 
-//--- Global Objects
+//--- Global Objects & Variables
 CTrade        trade;
 CPositionInfo posInfo;
 COrderInfo    orderInfo;
+datetime      cycleBarTime = 0; // Start bar time of current pending cycle
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -33,7 +35,8 @@ COrderInfo    orderInfo;
 int OnInit()
 {
     trade.SetExpertMagicNumber(MagicNumber);
-    SetTradeFillingMode();
+    // For pending orders, ORDER_FILLING_RETURN is the standard required filling mode in MQL5
+    trade.SetTypeFilling(ORDER_FILLING_RETURN);
     return(INIT_SUCCEEDED);
 }
 
@@ -69,24 +72,23 @@ void OnTick()
 
         // 4. Protection & 5. Gestion des gains
         ManageOpenPositions();
+        return;
     }
 
-    // 2. Règle de non-intervention : si totalPositions == 0 et totalPending > 0,
-    // l'EA ne touche à rien et laisse les ordres figés jusqu'à ce qu'un ordre soit déclenché.
-}
-
-//+------------------------------------------------------------------+
-//| Configure execution filling mode based on symbol capabilities    |
-//+------------------------------------------------------------------+
-void SetTradeFillingMode()
-{
-    uint filling = (uint)SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
-    if((filling & SYMBOL_FILLING_FOK) != 0)
-        trade.SetTypeFilling(ORDER_FILLING_FOK);
-    else if((filling & SYMBOL_FILLING_IOC) != 0)
-        trade.SetTypeFilling(ORDER_FILLING_IOC);
-    else
-        trade.SetTypeFilling(ORDER_FILLING_RETURN);
+    // 2. Règle de non-intervention & Expiration après MaxCandlesPending
+    if(totalPositions == 0 && totalPending > 0)
+    {
+        if(MaxCandlesPending > 0 && cycleBarTime > 0)
+        {
+            int barsPassed = iBarShift(_Symbol, _Period, cycleBarTime);
+            if(barsPassed >= MaxCandlesPending)
+            {
+                Print("MaxCandlesPending (", MaxCandlesPending, ") atteint. Annulation et recalcul des ordres en attente.");
+                DeletePendingOrders();
+                // Au prochain tick, un nouveau cycle débutera
+            }
+        }
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -187,22 +189,47 @@ void StartNewCycle()
     double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
     if(ask <= 0 || bid <= 0) return;
 
+    int stopLevel = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+
     // Enregistrer le prix actuel comme prix de référence
     double refPrice = NormalizeDouble((ask + bid) / 2.0, _Digits);
 
-    // Buy Stop à +20 points, Sell Stop à -20 points
-    double buyStopPrice  = NormalizeDouble(refPrice + DistancePoints * _Point, _Digits);
-    double sellStopPrice = NormalizeDouble(refPrice - DistancePoints * _Point, _Digits);
+    // Calculer les distances minimales autorisées par le courtier
+    int effDistance = MathMax(DistancePoints, stopLevel + 5);
 
-    // Le Stop Loss des deux ordres est placé au prix de référence
-    double buySL  = refPrice;
-    double sellSL = refPrice;
+    double buyStopPrice  = NormalizeDouble(MathMax(refPrice + effDistance * _Point, ask + (stopLevel + 2) * _Point), _Digits);
+    double sellStopPrice = NormalizeDouble(MathMin(refPrice - effDistance * _Point, bid - (stopLevel + 2) * _Point), _Digits);
 
-    // Calculer le lot selon le risque (3% du capital par défaut)
-    double lot = CalculateLotSize(DistancePoints);
+    // Stop Loss placé au prix de référence, tout en respectant le StopLevel du courtier
+    double buySL  = NormalizeDouble(MathMin(refPrice, buyStopPrice - (stopLevel + 2) * _Point), _Digits);
+    double sellSL = NormalizeDouble(MathMax(refPrice, sellStopPrice + (stopLevel + 2) * _Point), _Digits);
 
-    trade.BuyStop(lot, buyStopPrice, _Symbol, buySL, 0);
-    trade.SellStop(lot, sellStopPrice, _Symbol, sellSL, 0);
+    // Calculer le lot selon le risque
+    double lot = CalculateLotSize(effDistance);
+
+    // Placer le Buy Stop
+    bool buyResult = trade.BuyStop(lot, buyStopPrice, _Symbol, buySL, 0);
+    if(!buyResult)
+    {
+        Print("Erreur placement BuyStop: ", trade.ResultRetcode(), " - ", trade.ResultRetcodeDescription());
+    }
+
+    // Placer le Sell Stop
+    bool sellResult = trade.SellStop(lot, sellStopPrice, _Symbol, sellSL, 0);
+    if(!sellResult)
+    {
+        Print("Erreur placement SellStop: ", trade.ResultRetcode(), " - ", trade.ResultRetcodeDescription());
+    }
+
+    // Si l'un des deux a échoué, nettoyer pour éviter un état incomplet
+    if(!buyResult || !sellResult)
+    {
+        DeletePendingOrders();
+        return;
+    }
+
+    cycleBarTime = iTime(_Symbol, _Period, 0);
+    Print("Nouveau cycle démarré avec succès. BuyStop: ", buyStopPrice, " SellStop: ", sellStopPrice, " Lot: ", lot);
 }
 
 //+------------------------------------------------------------------+
