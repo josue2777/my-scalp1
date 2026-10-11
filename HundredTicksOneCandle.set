@@ -1,0 +1,12 @@
+InpBaseLot=0.01
+InpLotMultiplier=1.0
+InpTakeProfitPts=250
+InpStopLossPts=200
+InpMaxSpreadPts=200
+InpMaxTradesPerDay=100
+InpDailyProfitTarget=1000.0
+InpDailyLossLimit=800.0
+InpMagicNumber=100100
+InpTradeComment=100Ticks1Candle
+InpDashboardX=20
+InpDashboardY=50
