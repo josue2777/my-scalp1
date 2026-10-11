@@ -122,7 +122,7 @@ double GetTotalFloatingProfit()
         {
             if(pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
             {
-                totalProfit += pos.Profit() + pos.Swap() + pos.Commission();
+                totalProfit += pos.Profit() + pos.Swap();
             }
         }
     }
@@ -162,18 +162,25 @@ bool OpenTrade(ENUM_POSITION_TYPE type, double volume, PositionRole &assignedRol
 
     if(success)
     {
-        ulong ticket = trade.ResultOrder();
+        ulong ticket = trade.ResultPosition();
+        if(ticket == 0) ticket = trade.ResultOrder();
+
         // Fallback ticket query if needed
-        if(ticket == 0)
+        if(ticket == 0 || !pos.SelectByTicket(ticket))
         {
+            ticket = 0;
+            datetime latestTime = 0;
             for(int i = PositionsTotal() - 1; i >= 0; i--)
             {
                 if(pos.SelectByIndex(i) && pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
                 {
                     if(pos.PositionType() == type && MathAbs(pos.Volume() - volume) < 0.0001)
                     {
-                        ticket = pos.Ticket();
-                        break;
+                        if(pos.Time() >= latestTime)
+                        {
+                            latestTime = pos.Time();
+                            ticket = pos.Ticket();
+                        }
                     }
                 }
             }
@@ -187,9 +194,11 @@ bool OpenTrade(ENUM_POSITION_TYPE type, double volume, PositionRole &assignedRol
             assignedRole.volume = pos.Volume();
             assignedRole.time = pos.Time();
             assignedRole.active = true;
+            Print("[OpenTrade] Position ouverte avec succès #", ticket, " | Type: ", EnumToString(assignedRole.type), " | Lot: ", assignedRole.volume, " | Price: ", assignedRole.openPrice);
             return true;
         }
     }
+    Print("[OpenTrade] Échec de l'ouverture du trade. Code retour: ", trade.ResultRetcode(), " - ", trade.ResultRetcodeDescription());
     return false;
 }
 
@@ -198,6 +207,7 @@ bool OpenTrade(ENUM_POSITION_TYPE type, double volume, PositionRole &assignedRol
 //+------------------------------------------------------------------+
 void CloseAll()
 {
+    Print("[CloseAll] Fermeture de toutes les positions du cycle...");
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
         if(pos.SelectByIndex(i))
@@ -212,7 +222,7 @@ void CloseAll()
 }
 
 //+------------------------------------------------------------------+
-//| Sync cycle state on EA startup or restart                        |
+//| Sync cycle state on EA startup, restart, or state discrepancy    |
 //+------------------------------------------------------------------+
 void SyncCycleState()
 {
@@ -226,8 +236,6 @@ void SyncCycleState()
     // Find oldest position (first trade of the cycle)
     datetime oldestTime = D'2099.12.31 23:59:59';
     double firstLot = 0.0;
-    ulong latestTicket = 0;
-    ulong secondLatestTicket = 0;
 
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
@@ -250,22 +258,34 @@ void SyncCycleState()
         CycleActive = true;
     }
 
-    // Identify latest and second latest positions to restore Principale / Protection
+    // Find latest position (most recently opened) and second latest
+    ulong latestTicket = 0;
+    datetime latestTime = 0;
+
+    ulong secondLatestTicket = 0;
+    datetime secondLatestTime = 0;
+
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
         if(pos.SelectByIndex(i))
         {
             if(pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
             {
-                ulong ticket = pos.Ticket();
-                if(ticket > latestTicket)
+                ulong t = pos.Ticket();
+                datetime tm = pos.Time();
+
+                if(tm > latestTime || (tm == latestTime && t > latestTicket))
                 {
                     secondLatestTicket = latestTicket;
-                    latestTicket = ticket;
+                    secondLatestTime = latestTime;
+
+                    latestTicket = t;
+                    latestTime = tm;
                 }
-                else if(ticket > secondLatestTicket)
+                else if(tm > secondLatestTime || (tm == secondLatestTime && t > secondLatestTicket))
                 {
-                    secondLatestTicket = ticket;
+                    secondLatestTicket = t;
+                    secondLatestTime = tm;
                 }
             }
         }
@@ -283,47 +303,87 @@ void SyncCycleState()
             ActivePrincipale.active = true;
 
             ActiveProtection.active = false;
+            ActiveProtection.ticket = 0;
         }
     }
     else if(total >= 2)
     {
-        PositionRole p1;
-        PositionRole p2;
+        PositionRole pLatest;
+        PositionRole pSecondLatest;
 
         if(secondLatestTicket > 0 && pos.SelectByTicket(secondLatestTicket))
         {
-            p1.ticket = secondLatestTicket;
-            p1.type = pos.PositionType();
-            p1.openPrice = pos.PriceOpen();
-            p1.volume = pos.Volume();
-            p1.time = pos.Time();
-            p1.active = true;
-        }
-        if(latestTicket > 0 && pos.SelectByTicket(latestTicket))
-        {
-            p2.ticket = latestTicket;
-            p2.type = pos.PositionType();
-            p2.openPrice = pos.PriceOpen();
-            p2.volume = pos.Volume();
-            p2.time = pos.Time();
-            p2.active = true;
+            pSecondLatest.ticket = secondLatestTicket;
+            pSecondLatest.type = pos.PositionType();
+            pSecondLatest.openPrice = pos.PriceOpen();
+            pSecondLatest.volume = pos.Volume();
+            pSecondLatest.time = pos.Time();
+            pSecondLatest.active = true;
         }
 
-        if(p1.active && p2.active && p1.type != p2.type)
+        if(latestTicket > 0 && pos.SelectByTicket(latestTicket))
         {
-            ActivePrincipale = p1;
-            ActiveProtection = p2;
+            pLatest.ticket = latestTicket;
+            pLatest.type = pos.PositionType();
+            pLatest.openPrice = pos.PriceOpen();
+            pLatest.volume = pos.Volume();
+            pLatest.time = pos.Time();
+            pLatest.active = true;
         }
-        else if(p2.active)
+
+        // In our state machine:
+        // When Protection is added, pLatest is Protection and pSecondLatest is Principale (opposite types).
+        // If a new Principale was opened (Principale Bis or Nouvelle Principale), pLatest is the new Principale,
+        // and ActiveProtection should be cleared until a new protection level is hit.
+        if(pLatest.active && pSecondLatest.active && pLatest.type != pSecondLatest.type)
         {
-            ActivePrincipale = p2;
+            ActivePrincipale = pSecondLatest;
+            ActiveProtection = pLatest;
+        }
+        else if(pLatest.active)
+        {
+            ActivePrincipale = pLatest;
             ActiveProtection.active = false;
+            ActiveProtection.ticket = 0;
         }
-        else if(p1.active)
+    }
+
+    Print("[SyncCycleState] Synchronisation effectuee. Total positions: ", total,
+          " | Principale Ticket: #", ActivePrincipale.ticket, " (Active: ", ActivePrincipale.active, ")",
+          " | Protection Ticket: #", ActiveProtection.ticket, " (Active: ", ActiveProtection.active, ")",
+          " | TargetProfit: ", TargetProfit);
+}
+
+//+------------------------------------------------------------------+
+//| Validate tracked tickets and resync if any tracked position was closed |
+//+------------------------------------------------------------------+
+void ValidateAndSyncState()
+{
+    int total = GetPositionCount();
+    if(total == 0)
+    {
+        if(CycleActive || ActivePrincipale.active || ActiveProtection.active)
         {
-            ActivePrincipale = p1;
-            ActiveProtection.active = false;
+            ResetStateVariables();
         }
+        return;
+    }
+
+    bool resyncNeeded = false;
+
+    if(ActivePrincipale.active && (!pos.SelectByTicket(ActivePrincipale.ticket) || pos.Magic() != MagicNumber || pos.Symbol() != _Symbol))
+    {
+        resyncNeeded = true;
+    }
+
+    if(ActiveProtection.active && (!pos.SelectByTicket(ActiveProtection.ticket) || pos.Magic() != MagicNumber || pos.Symbol() != _Symbol))
+    {
+        resyncNeeded = true;
+    }
+
+    if(!CycleActive || !ActivePrincipale.active || resyncNeeded)
+    {
+        SyncCycleState();
     }
 }
 
@@ -342,8 +402,10 @@ void ManageStrategyStateMachine()
         {
             ActivePrincipale = newP;
             ActiveProtection.active = false;
+            ActiveProtection.ticket = 0;
             TargetProfit = LotSize * 500.0;
             CycleActive = true;
+            Print("[CycleStart] Nouveau cycle débuté avec BUY Lot: ", LotSize, " | Target Profit: $", TargetProfit);
         }
         return;
     }
@@ -363,8 +425,10 @@ void ManageStrategyStateMachine()
         if(ActivePrincipale.type == POSITION_TYPE_BUY)
         {
             // Price fell 500 pts below BUY Principale => Open SELL Protection (same lot)
-            if((ActivePrincipale.openPrice - bid) >= HedgeDistancePts * _Point)
+            double distance = (ActivePrincipale.openPrice - bid) / _Point;
+            if(distance >= HedgeDistancePts)
             {
+                Print("[Protection Trigger] Prix (Bid: ", bid, ") est à ", distance, " pts sous BUY Principale (", ActivePrincipale.openPrice, "). Ouverture SELL Protection...");
                 PositionRole prot;
                 if(OpenTrade(POSITION_TYPE_SELL, ActivePrincipale.volume, prot))
                 {
@@ -375,8 +439,10 @@ void ManageStrategyStateMachine()
         else if(ActivePrincipale.type == POSITION_TYPE_SELL)
         {
             // Price rose 500 pts above SELL Principale => Open BUY Protection (same lot)
-            if((ask - ActivePrincipale.openPrice) >= HedgeDistancePts * _Point)
+            double distance = (ask - ActivePrincipale.openPrice) / _Point;
+            if(distance >= HedgeDistancePts)
             {
+                Print("[Protection Trigger] Prix (Ask: ", ask, ") est à ", distance, " pts au-dessus de SELL Principale (", ActivePrincipale.openPrice, "). Ouverture BUY Protection...");
                 PositionRole prot;
                 if(OpenTrade(POSITION_TYPE_BUY, ActivePrincipale.volume, prot))
                 {
@@ -395,20 +461,24 @@ void ManageStrategyStateMachine()
         // Price returned up to (or above) BUY open price
         if(ask >= ActivePrincipale.openPrice)
         {
+            Print("[Scénario 1 Trigger] Prix (Ask: ", ask, ") est revenu au niveau de BUY Principale (", ActivePrincipale.openPrice, "). Ouverture PRINCIPALE BIS BUY...");
             // Action: Open PRINCIPALE BIS same type and lot as ActivePrincipale
             PositionRole newP;
             if(OpenTrade(POSITION_TYPE_BUY, ActivePrincipale.volume, newP))
             {
                 ActivePrincipale = newP;
                 ActiveProtection.active = false; // Reset protection state
+                ActiveProtection.ticket = 0;
             }
             return;
         }
 
         // SCÉNARIO 2: Protection is winning (+500 pts in protection direction)
         // Protection is SELL, so price drops 500 pts below ActiveProtection open price
-        if((ActiveProtection.openPrice - bid) >= HedgeDistancePts * _Point)
+        double protDistance = (ActiveProtection.openPrice - bid) / _Point;
+        if(protDistance >= HedgeDistancePts)
         {
+            Print("[Scénario 2 Trigger] Protection SELL gagne +", protDistance, " pts. Ouverture NOUVELLE PRINCIPALE SELL avec lot doublé...");
             // Action: Open NOUVELLE PRINCIPALE in protection direction (SELL) with doubled lot
             double doubleLot = ActiveProtection.volume * 2.0;
             PositionRole newP;
@@ -416,6 +486,7 @@ void ManageStrategyStateMachine()
             {
                 ActivePrincipale = newP;
                 ActiveProtection.active = false; // Reset protection state
+                ActiveProtection.ticket = 0;
             }
             return;
         }
@@ -426,20 +497,24 @@ void ManageStrategyStateMachine()
         // Price returned down to (or below) SELL open price
         if(bid <= ActivePrincipale.openPrice)
         {
+            Print("[Scénario 1 Trigger] Prix (Bid: ", bid, ") est revenu au niveau de SELL Principale (", ActivePrincipale.openPrice, "). Ouverture PRINCIPALE BIS SELL...");
             // Action: Open PRINCIPALE BIS same type and lot as ActivePrincipale
             PositionRole newP;
             if(OpenTrade(POSITION_TYPE_SELL, ActivePrincipale.volume, newP))
             {
                 ActivePrincipale = newP;
                 ActiveProtection.active = false; // Reset protection state
+                ActiveProtection.ticket = 0;
             }
             return;
         }
 
         // SCÉNARIO 2: Protection is winning (+500 pts in protection direction)
         // Protection is BUY, so price rises 500 pts above ActiveProtection open price
-        if((ask - ActiveProtection.openPrice) >= HedgeDistancePts * _Point)
+        double protDistance = (ask - ActiveProtection.openPrice) / _Point;
+        if(protDistance >= HedgeDistancePts)
         {
+            Print("[Scénario 2 Trigger] Protection BUY gagne +", protDistance, " pts. Ouverture NOUVELLE PRINCIPALE BUY avec lot doublé...");
             // Action: Open NOUVELLE PRINCIPALE in protection direction (BUY) with doubled lot
             double doubleLot = ActiveProtection.volume * 2.0;
             PositionRole newP;
@@ -447,6 +522,7 @@ void ManageStrategyStateMachine()
             {
                 ActivePrincipale = newP;
                 ActiveProtection.active = false; // Reset protection state
+                ActiveProtection.ticket = 0;
             }
             return;
         }
@@ -458,23 +534,21 @@ void ManageStrategyStateMachine()
 //+------------------------------------------------------------------+
 void OnTick()
 {
-    // 1. Sync state if needed
-    if(GetPositionCount() > 0 && !CycleActive)
-    {
-        SyncCycleState();
-    }
+    // 1. Continuous real-time validation & state sync on every tick
+    ValidateAndSyncState();
 
-    // 2. Check Basket Floating Profit Target Closure
+    // 2. Check Basket Floating Profit Target Closure on every tick
     if(GetPositionCount() > 0 && CycleActive)
     {
         double floatingProfit = GetTotalFloatingProfit();
         if(floatingProfit >= TargetProfit)
         {
+            Print("[OnTick Profit Target Hit] Profit flottant ($", floatingProfit, ") >= TargetProfit ($", TargetProfit, "). Clôture totale du cycle !");
             CloseAll();
             return;
         }
     }
 
-    // 3. Execute State Machine Logic
+    // 3. Execute State Machine Logic on every tick
     ManageStrategyStateMachine();
 }
