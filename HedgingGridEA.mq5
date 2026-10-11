@@ -25,6 +25,16 @@ struct PositionRole
     double             volume;
     datetime           time;
     bool               active;
+
+    PositionRole()
+    {
+        ticket = 0;
+        type = POSITION_TYPE_BUY;
+        openPrice = 0.0;
+        volume = 0.0;
+        time = 0;
+        active = false;
+    }
 };
 
 //--- Global Objects & Variables
@@ -277,8 +287,10 @@ void SyncCycleState()
     }
     else if(total >= 2)
     {
-        PositionRole p1, p2;
-        if(pos.SelectByTicket(secondLatestTicket))
+        PositionRole p1;
+        PositionRole p2;
+
+        if(secondLatestTicket > 0 && pos.SelectByTicket(secondLatestTicket))
         {
             p1.ticket = secondLatestTicket;
             p1.type = pos.PositionType();
@@ -287,7 +299,7 @@ void SyncCycleState()
             p1.time = pos.Time();
             p1.active = true;
         }
-        if(pos.SelectByTicket(latestTicket))
+        if(latestTicket > 0 && pos.SelectByTicket(latestTicket))
         {
             p2.ticket = latestTicket;
             p2.type = pos.PositionType();
@@ -297,14 +309,19 @@ void SyncCycleState()
             p2.active = true;
         }
 
-        if(p1.type != p2.type)
+        if(p1.active && p2.active && p1.type != p2.type)
         {
             ActivePrincipale = p1;
             ActiveProtection = p2;
         }
-        else
+        else if(p2.active)
         {
             ActivePrincipale = p2;
+            ActiveProtection.active = false;
+        }
+        else if(p1.active)
+        {
+            ActivePrincipale = p1;
             ActiveProtection.active = false;
         }
     }
