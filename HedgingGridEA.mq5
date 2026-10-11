@@ -11,10 +11,11 @@
 
 //--- Inputs
 input group "=== Strategy Parameters ==="
-input double LotSize          = 0.01;   // Lot size for the first trade of the cycle
-input int    HedgeDistancePts = 500;    // Distance for protection / grid steps in points
-input int    MaxSpreadPts     = 200;    // Maximum allowed spread in points
-input ulong  MagicNumber      = 88888;  // EA Magic Number
+input double LotSize            = 0.01;   // Lot size for the first trade of the cycle
+input int    HedgeDistancePts   = 500;    // Distance for protection / grid steps in points
+input int    MaxSpreadPts       = 200;    // Maximum allowed spread in points
+input double MaxGlobalProfitUSD = 700.0;  // Absolute max global profit target in USD
+input ulong  MagicNumber        = 88888;  // EA Magic Number
 
 //--- Structure to track position roles in state machine
 struct PositionRole
@@ -464,11 +465,11 @@ void OnTick()
         SyncCycleState();
     }
 
-    // 2. Check Basket Floating Profit Target Closure
+    // 2. Check Basket Floating Profit Target Closure (TargetProfit OR MaxGlobalProfitUSD)
     if(GetPositionCount() > 0 && CycleActive)
     {
         double floatingProfit = GetTotalFloatingProfit();
-        if(floatingProfit >= TargetProfit)
+        if(floatingProfit >= TargetProfit || (MaxGlobalProfitUSD > 0.0 && floatingProfit >= MaxGlobalProfitUSD))
         {
             CloseAll();
             return;
