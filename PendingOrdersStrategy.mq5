@@ -4,24 +4,34 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, TradingBot Pro"
 #property link      ""
-#property version   "1.21"
-#property description "Strategy based on fixed pending Buy Stop and Sell Stop orders with Break Even, Trailing Stop, 3% Risk Management, and Candle Expiration."
+#property version   "1.30"
+#property description "Strategy based on pending orders with Break Even, Trailing Stop, 3% Risk Management, Expiration, and Direction Inversion."
 
 #include <Trade/Trade.mqh>
 #include <Trade/PositionInfo.mqh>
 #include <Trade/OrderInfo.mqh>
 
+//--- Enums
+enum ENUM_TRADE_DIRECTION
+{
+    DIRECTION_BOTH_STANDARD = 0, // Standard (Buy Stop au-dessus, Sell Stop en-dessous)
+    DIRECTION_BOTH_INVERTED = 1, // Inversé (Sell Limit au-dessus, Buy Limit en-dessous)
+    DIRECTION_BUY_ONLY      = 2, // Achats uniquement (Buy Stop au-dessus)
+    DIRECTION_SELL_ONLY     = 3  // Ventes uniquement (Sell Stop en-dessous)
+};
+
 //--- Input Parameters
 input group "=== Strategy Settings ==="
-input ulong  MagicNumber            = 123456; // Magic Number
-input bool   UseAutoLot             = true;   // Calculate lot size based on capital risk %
-input double RiskPercent            = 3.0;    // Risk per cycle (% of Account Balance)
-input double FixedLotSize           = 0.01;   // Fixed Lot Size (used if UseAutoLot = false)
-input int    DistancePoints         = 20;     // Order Distance from Reference Price (points)
-input int    BreakEvenPoints        = 20;     // Break Even Trigger Profit (points)
-input int    TrailingStartPoints    = 30;     // Trailing Stop Trigger Profit (points)
-input int    TrailingDistancePoints = 20;     // Trailing Stop Distance (points)
-input int    MaxCandlesPending      = 0;      // Refresh pending orders after N candles (0 = disabled)
+input ulong                MagicNumber            = 123456;                  // Magic Number
+input ENUM_TRADE_DIRECTION TradeDirectionMode     = DIRECTION_BOTH_STANDARD; // Mode Direction des ordres
+input bool                 UseAutoLot             = true;                    // Calculate lot size based on capital risk %
+input double               RiskPercent            = 3.0;                     // Risk per cycle (% of Account Balance)
+input double               FixedLotSize           = 0.01;                    // Fixed Lot Size (used if UseAutoLot = false)
+input int                  DistancePoints         = 20;                      // Order Distance from Reference Price (points)
+input int                  BreakEvenPoints        = 20;                      // Break Even Trigger Profit (points)
+input int                  TrailingStartPoints    = 30;                      // Trailing Stop Trigger Profit (points)
+input int                  TrailingDistancePoints = 20;                      // Trailing Stop Distance (points)
+input int                  MaxCandlesPending      = 0;                       // Refresh pending orders after N candles (0 = disabled)
 
 //--- Global Objects & Variables
 CTrade        trade;
@@ -35,7 +45,7 @@ datetime      cycleBarTime = 0; // Start bar time of current pending cycle
 int OnInit()
 {
     trade.SetExpertMagicNumber(MagicNumber);
-    // For pending orders, ORDER_FILLING_RETURN is the standard required filling mode in MQL5
+    // For pending orders, ORDER_FILLING_RETURN is required in MQL5
     trade.SetTypeFilling(ORDER_FILLING_RETURN);
     return(INIT_SUCCEEDED);
 }
@@ -85,7 +95,6 @@ void OnTick()
             {
                 Print("MaxCandlesPending (", MaxCandlesPending, ") atteint. Annulation et recalcul des ordres en attente.");
                 DeletePendingOrders();
-                // Au prochain tick, un nouveau cycle débutera
             }
         }
     }
@@ -181,7 +190,7 @@ double CalculateLotSize(int slPoints)
 }
 
 //+------------------------------------------------------------------+
-//| Start a new cycle by placing Buy Stop and Sell Stop              |
+//| Start a new cycle by placing Buy/Sell pending orders             |
 //+------------------------------------------------------------------+
 void StartNewCycle()
 {
@@ -194,42 +203,63 @@ void StartNewCycle()
     // Enregistrer le prix actuel comme prix de référence
     double refPrice = NormalizeDouble((ask + bid) / 2.0, _Digits);
 
-    // Calculer les distances minimales autorisées par le courtier
+    // Distance minimale autorisée par le courtier
     int effDistance = MathMax(DistancePoints, stopLevel + 5);
 
-    double buyStopPrice  = NormalizeDouble(MathMax(refPrice + effDistance * _Point, ask + (stopLevel + 2) * _Point), _Digits);
-    double sellStopPrice = NormalizeDouble(MathMin(refPrice - effDistance * _Point, bid - (stopLevel + 2) * _Point), _Digits);
-
-    // Stop Loss placé au prix de référence, tout en respectant le StopLevel du courtier
-    double buySL  = NormalizeDouble(MathMin(refPrice, buyStopPrice - (stopLevel + 2) * _Point), _Digits);
-    double sellSL = NormalizeDouble(MathMax(refPrice, sellStopPrice + (stopLevel + 2) * _Point), _Digits);
+    double upperPrice = NormalizeDouble(MathMax(refPrice + effDistance * _Point, ask + (stopLevel + 2) * _Point), _Digits);
+    double lowerPrice = NormalizeDouble(MathMin(refPrice - effDistance * _Point, bid - (stopLevel + 2) * _Point), _Digits);
 
     // Calculer le lot selon le risque
     double lot = CalculateLotSize(effDistance);
 
-    // Placer le Buy Stop
-    bool buyResult = trade.BuyStop(lot, buyStopPrice, _Symbol, buySL, 0);
-    if(!buyResult)
+    bool res1 = true, res2 = true;
+
+    switch(TradeDirectionMode)
     {
-        Print("Erreur placement BuyStop: ", trade.ResultRetcode(), " - ", trade.ResultRetcodeDescription());
+        case DIRECTION_BOTH_STANDARD:
+        {
+            double buySL  = NormalizeDouble(MathMin(refPrice, upperPrice - (stopLevel + 2) * _Point), _Digits);
+            double sellSL = NormalizeDouble(MathMax(refPrice, lowerPrice + (stopLevel + 2) * _Point), _Digits);
+
+            res1 = trade.BuyStop(lot, upperPrice, _Symbol, buySL, 0);
+            res2 = trade.SellStop(lot, lowerPrice, _Symbol, sellSL, 0);
+            break;
+        }
+
+        case DIRECTION_BOTH_INVERTED:
+        {
+            double sellSL = NormalizeDouble(upperPrice + effDistance * _Point, _Digits);
+            double buySL  = NormalizeDouble(lowerPrice - effDistance * _Point, _Digits);
+
+            res1 = trade.SellLimit(lot, upperPrice, _Symbol, sellSL, 0);
+            res2 = trade.BuyLimit(lot, lowerPrice, _Symbol, buySL, 0);
+            break;
+        }
+
+        case DIRECTION_BUY_ONLY:
+        {
+            double buySL = NormalizeDouble(MathMin(refPrice, upperPrice - (stopLevel + 2) * _Point), _Digits);
+            res1 = trade.BuyStop(lot, upperPrice, _Symbol, buySL, 0);
+            break;
+        }
+
+        case DIRECTION_SELL_ONLY:
+        {
+            double sellSL = NormalizeDouble(MathMax(refPrice, lowerPrice + (stopLevel + 2) * _Point), _Digits);
+            res2 = trade.SellStop(lot, lowerPrice, _Symbol, sellSL, 0);
+            break;
+        }
     }
 
-    // Placer le Sell Stop
-    bool sellResult = trade.SellStop(lot, sellStopPrice, _Symbol, sellSL, 0);
-    if(!sellResult)
+    if(!res1 || !res2)
     {
-        Print("Erreur placement SellStop: ", trade.ResultRetcode(), " - ", trade.ResultRetcodeDescription());
-    }
-
-    // Si l'un des deux a échoué, nettoyer pour éviter un état incomplet
-    if(!buyResult || !sellResult)
-    {
+        Print("Erreur placement ordre: Buy/Upper ok=", res1, ", Sell/Lower ok=", res2, " - ", trade.ResultRetcodeDescription());
         DeletePendingOrders();
         return;
     }
 
     cycleBarTime = iTime(_Symbol, _Period, 0);
-    Print("Nouveau cycle démarré avec succès. BuyStop: ", buyStopPrice, " SellStop: ", sellStopPrice, " Lot: ", lot);
+    Print("Nouveau cycle démarré. Mode: ", EnumToString(TradeDirectionMode), " Upper: ", upperPrice, " Lower: ", lowerPrice, " Lot: ", lot);
 }
 
 //+------------------------------------------------------------------+
