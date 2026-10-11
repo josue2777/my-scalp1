@@ -4,18 +4,28 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026"
 #property link      ""
-#property version   "1.00"
+#property version   "2.00"
 
 #include <Trade/Trade.mqh>
 #include <Trade/PositionInfo.mqh>
 
 //--- Inputs
-input group "=== Hedging Grid Parameters ==="
-input double LotSize          = 0.01;   // Base lot size for the cycle
-input int    HedgeDistancePts = 500;    // Grid hedge distance in points
-input int    IndividualTPPts  = 750;    // Reference TP in points (not placed on broker)
+input group "=== Strategy Parameters ==="
+input double LotSize          = 0.01;   // Lot size for the first trade of the cycle
+input int    HedgeDistancePts = 500;    // Distance for protection / grid steps in points
 input int    MaxSpreadPts     = 200;    // Maximum allowed spread in points
 input ulong  MagicNumber      = 88888;  // EA Magic Number
+
+//--- Structure to track position roles in state machine
+struct PositionRole
+{
+    ulong              ticket;
+    ENUM_POSITION_TYPE type;
+    double             openPrice;
+    double             volume;
+    datetime           time;
+    bool               active;
+};
 
 //--- Global Objects & Variables
 CTrade        trade;
@@ -24,6 +34,9 @@ CPositionInfo pos;
 double TargetProfit = 0.0;
 bool   CycleActive  = false;
 
+PositionRole ActivePrincipale;
+PositionRole ActiveProtection;
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -31,6 +44,7 @@ int OnInit()
 {
     trade.SetExpertMagicNumber(MagicNumber);
     SetTradeFilling();
+    ResetStateVariables();
     SyncCycleState();
     return(INIT_SUCCEEDED);
 }
@@ -40,6 +54,19 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+}
+
+//+------------------------------------------------------------------+
+//| Reset internal state variables                                   |
+//+------------------------------------------------------------------+
+void ResetStateVariables()
+{
+    ActivePrincipale.ticket = 0;
+    ActivePrincipale.active = false;
+    ActiveProtection.ticket = 0;
+    ActiveProtection.active = false;
+    TargetProfit = 0.0;
+    CycleActive = false;
 }
 
 //+------------------------------------------------------------------+
@@ -93,21 +120,104 @@ double GetTotalFloatingProfit()
 }
 
 //+------------------------------------------------------------------+
-//| Sync cycle state on EA startup or tick                           |
+//| Check spread filter                                              |
+//+------------------------------------------------------------------+
+bool IsSpreadValid()
+{
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    int currentSpread = (int)MathRound((ask - bid) / _Point);
+    return (currentSpread <= MaxSpreadPts);
+}
+
+//+------------------------------------------------------------------+
+//| Open a position and assign its role                              |
+//+------------------------------------------------------------------+
+bool OpenTrade(ENUM_POSITION_TYPE type, double volume, PositionRole &assignedRole)
+{
+    if(!IsSpreadValid()) return false;
+
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    bool success = false;
+
+    if(type == POSITION_TYPE_BUY)
+    {
+        success = trade.Buy(volume, _Symbol, ask, 0, 0, "HedgingGrid BUY");
+    }
+    else
+    {
+        success = trade.Sell(volume, _Symbol, bid, 0, 0, "HedgingGrid SELL");
+    }
+
+    if(success)
+    {
+        ulong ticket = trade.ResultOrder();
+        // Fallback ticket query if needed
+        if(ticket == 0)
+        {
+            for(int i = PositionsTotal() - 1; i >= 0; i--)
+            {
+                if(pos.SelectByIndex(i) && pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
+                {
+                    if(pos.PositionType() == type && MathAbs(pos.Volume() - volume) < 0.0001)
+                    {
+                        ticket = pos.Ticket();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if(ticket > 0 && pos.SelectByTicket(ticket))
+        {
+            assignedRole.ticket = ticket;
+            assignedRole.type = pos.PositionType();
+            assignedRole.openPrice = pos.PriceOpen();
+            assignedRole.volume = pos.Volume();
+            assignedRole.time = pos.Time();
+            assignedRole.active = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+//+------------------------------------------------------------------+
+//| Close all open positions for this EA                             |
+//+------------------------------------------------------------------+
+void CloseAll()
+{
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(pos.SelectByIndex(i))
+        {
+            if(pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
+            {
+                trade.PositionClose(pos.Ticket());
+            }
+        }
+    }
+    ResetStateVariables();
+}
+
+//+------------------------------------------------------------------+
+//| Sync cycle state on EA startup or restart                        |
 //+------------------------------------------------------------------+
 void SyncCycleState()
 {
     int total = GetPositionCount();
     if(total == 0)
     {
-        CycleActive = false;
-        TargetProfit = 0.0;
+        ResetStateVariables();
         return;
     }
 
-    // Find the oldest position (first trade of the cycle)
+    // Find oldest position (first trade of the cycle)
     datetime oldestTime = D'2099.12.31 23:59:59';
     double firstLot = 0.0;
+    ulong latestTicket = 0;
+    ulong secondLatestTicket = 0;
 
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
@@ -129,127 +239,199 @@ void SyncCycleState()
         TargetProfit = firstLot * 500.0;
         CycleActive = true;
     }
-}
 
-//+------------------------------------------------------------------+
-//| Get details of the most recently opened position                 |
-//+------------------------------------------------------------------+
-bool GetLatestPosition(ENUM_POSITION_TYPE &type, double &openPrice)
-{
-    ulong maxTicket = 0;
-    bool found = false;
-
+    // Identify latest and second latest positions to restore Principale / Protection
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
         if(pos.SelectByIndex(i))
         {
             if(pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
             {
-                if(pos.Ticket() > maxTicket)
+                ulong ticket = pos.Ticket();
+                if(ticket > latestTicket)
                 {
-                    maxTicket = pos.Ticket();
-                    type = pos.PositionType();
-                    openPrice = pos.PriceOpen();
-                    found = true;
+                    secondLatestTicket = latestTicket;
+                    latestTicket = ticket;
+                }
+                else if(ticket > secondLatestTicket)
+                {
+                    secondLatestTicket = ticket;
                 }
             }
         }
     }
-    return found;
-}
 
-//+------------------------------------------------------------------+
-//| Check spread filter                                              |
-//+------------------------------------------------------------------+
-bool IsSpreadValid()
-{
-    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    int currentSpread = (int)MathRound((ask - bid) / _Point);
-    return (currentSpread <= MaxSpreadPts);
-}
-
-//+------------------------------------------------------------------+
-//| Open Buy Trade                                                   |
-//+------------------------------------------------------------------+
-bool OpenBuy()
-{
-    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    // TP is passed as 0 to ensure positions are only closed as a basket when PROFIT_CIBLE_CYCLE is reached
-    return trade.Buy(LotSize, _Symbol, ask, 0, 0, "HedgingGrid BUY");
-}
-
-//+------------------------------------------------------------------+
-//| Open Sell Trade                                                  |
-//+------------------------------------------------------------------+
-bool OpenSell()
-{
-    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    // TP is passed as 0 to ensure positions are only closed as a basket when PROFIT_CIBLE_CYCLE is reached
-    return trade.Sell(LotSize, _Symbol, bid, 0, 0, "HedgingGrid SELL");
-}
-
-//+------------------------------------------------------------------+
-//| Close all open positions for this EA                             |
-//+------------------------------------------------------------------+
-void CloseAll()
-{
-    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    if(total == 1)
     {
-        if(pos.SelectByIndex(i))
+        if(pos.SelectByTicket(latestTicket))
         {
-            if(pos.Magic() == MagicNumber && pos.Symbol() == _Symbol)
-            {
-                trade.PositionClose(pos.Ticket());
-            }
+            ActivePrincipale.ticket = latestTicket;
+            ActivePrincipale.type = pos.PositionType();
+            ActivePrincipale.openPrice = pos.PriceOpen();
+            ActivePrincipale.volume = pos.Volume();
+            ActivePrincipale.time = pos.Time();
+            ActivePrincipale.active = true;
+
+            ActiveProtection.active = false;
+        }
+    }
+    else if(total >= 2)
+    {
+        PositionRole p1, p2;
+        if(pos.SelectByTicket(secondLatestTicket))
+        {
+            p1.ticket = secondLatestTicket;
+            p1.type = pos.PositionType();
+            p1.openPrice = pos.PriceOpen();
+            p1.volume = pos.Volume();
+            p1.time = pos.Time();
+            p1.active = true;
+        }
+        if(pos.SelectByTicket(latestTicket))
+        {
+            p2.ticket = latestTicket;
+            p2.type = pos.PositionType();
+            p2.openPrice = pos.PriceOpen();
+            p2.volume = pos.Volume();
+            p2.time = pos.Time();
+            p2.active = true;
+        }
+
+        if(p1.type != p2.type)
+        {
+            ActivePrincipale = p1;
+            ActiveProtection = p2;
+        }
+        else
+        {
+            ActivePrincipale = p2;
+            ActiveProtection.active = false;
         }
     }
 }
 
 //+------------------------------------------------------------------+
-//| Manage hedging grid order execution                              |
+//| Manage state machine logic for 2 scenarios                       |
 //+------------------------------------------------------------------+
-void ManageGrid()
+void ManageStrategyStateMachine()
 {
     int total = GetPositionCount();
 
+    // --- ETAT 0: Start of Cycle
     if(total == 0)
     {
-        if(!IsSpreadValid()) return;
-
-        if(OpenBuy())
+        PositionRole newP;
+        if(OpenTrade(POSITION_TYPE_BUY, LotSize, newP))
         {
+            ActivePrincipale = newP;
+            ActiveProtection.active = false;
             TargetProfit = LotSize * 500.0;
             CycleActive = true;
         }
         return;
     }
 
-    // Grid execution for active cycle
-    ENUM_POSITION_TYPE lastType;
-    double lastOpenPrice = 0.0;
-
-    if(!GetLatestPosition(lastType, lastOpenPrice)) return;
+    if(!ActivePrincipale.active)
+    {
+        SyncCycleState();
+        if(!ActivePrincipale.active) return;
+    }
 
     double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
     double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-    if(lastType == POSITION_TYPE_BUY)
+    // --- ETAT 0 (Suite): Initial trade open, waiting for initial protection (-500 pts)
+    if(!ActiveProtection.active)
     {
-        // If price fell 500 pts from last BUY, open SELL counter-trade
-        if((lastOpenPrice - bid) >= HedgeDistancePts * _Point)
+        if(ActivePrincipale.type == POSITION_TYPE_BUY)
         {
-            if(!IsSpreadValid()) return;
-            OpenSell();
+            // Price fell 500 pts below BUY Principale => Open SELL Protection (same lot)
+            if((ActivePrincipale.openPrice - bid) >= HedgeDistancePts * _Point)
+            {
+                PositionRole prot;
+                if(OpenTrade(POSITION_TYPE_SELL, ActivePrincipale.volume, prot))
+                {
+                    ActiveProtection = prot;
+                }
+            }
+        }
+        else if(ActivePrincipale.type == POSITION_TYPE_SELL)
+        {
+            // Price rose 500 pts above SELL Principale => Open BUY Protection (same lot)
+            if((ask - ActivePrincipale.openPrice) >= HedgeDistancePts * _Point)
+            {
+                PositionRole prot;
+                if(OpenTrade(POSITION_TYPE_BUY, ActivePrincipale.volume, prot))
+                {
+                    ActiveProtection = prot;
+                }
+            }
+        }
+        return;
+    }
+
+    // --- State machine when both PRINCIPALE and PROTECTION are active
+    // SCÉNARIO 1: Price returns to current ActivePrincipale level
+    if(ActivePrincipale.type == POSITION_TYPE_BUY)
+    {
+        // ActivePrincipale is BUY, ActiveProtection is SELL
+        // Price returned up to (or above) BUY open price
+        if(ask >= ActivePrincipale.openPrice)
+        {
+            // Action: Open PRINCIPALE BIS same type and lot as ActivePrincipale
+            PositionRole newP;
+            if(OpenTrade(POSITION_TYPE_BUY, ActivePrincipale.volume, newP))
+            {
+                ActivePrincipale = newP;
+                ActiveProtection.active = false; // Reset protection state
+            }
+            return;
+        }
+
+        // SCÉNARIO 2: Protection is winning (+500 pts in protection direction)
+        // Protection is SELL, so price drops 500 pts below ActiveProtection open price
+        if((ActiveProtection.openPrice - bid) >= HedgeDistancePts * _Point)
+        {
+            // Action: Open NOUVELLE PRINCIPALE in protection direction (SELL) with doubled lot
+            double doubleLot = ActiveProtection.volume * 2.0;
+            PositionRole newP;
+            if(OpenTrade(POSITION_TYPE_SELL, doubleLot, newP))
+            {
+                ActivePrincipale = newP;
+                ActiveProtection.active = false; // Reset protection state
+            }
+            return;
         }
     }
-    else if(lastType == POSITION_TYPE_SELL)
+    else if(ActivePrincipale.type == POSITION_TYPE_SELL)
     {
-        // If price rose 500 pts from last SELL, open BUY counter-trade
-        if((ask - lastOpenPrice) >= HedgeDistancePts * _Point)
+        // ActivePrincipale is SELL, ActiveProtection is BUY
+        // Price returned down to (or below) SELL open price
+        if(bid <= ActivePrincipale.openPrice)
         {
-            if(!IsSpreadValid()) return;
-            OpenBuy();
+            // Action: Open PRINCIPALE BIS same type and lot as ActivePrincipale
+            PositionRole newP;
+            if(OpenTrade(POSITION_TYPE_SELL, ActivePrincipale.volume, newP))
+            {
+                ActivePrincipale = newP;
+                ActiveProtection.active = false; // Reset protection state
+            }
+            return;
+        }
+
+        // SCÉNARIO 2: Protection is winning (+500 pts in protection direction)
+        // Protection is BUY, so price rises 500 pts above ActiveProtection open price
+        if((ask - ActiveProtection.openPrice) >= HedgeDistancePts * _Point)
+        {
+            // Action: Open NOUVELLE PRINCIPALE in protection direction (BUY) with doubled lot
+            double doubleLot = ActiveProtection.volume * 2.0;
+            PositionRole newP;
+            if(OpenTrade(POSITION_TYPE_BUY, doubleLot, newP))
+            {
+                ActivePrincipale = newP;
+                ActiveProtection.active = false; // Reset protection state
+            }
+            return;
         }
     }
 }
@@ -272,12 +454,10 @@ void OnTick()
         if(floatingProfit >= TargetProfit)
         {
             CloseAll();
-            CycleActive = false;
-            TargetProfit = 0.0;
             return;
         }
     }
 
-    // 3. Execute Grid Logic
-    ManageGrid();
+    // 3. Execute State Machine Logic
+    ManageStrategyStateMachine();
 }
