@@ -4,8 +4,8 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, TradingBot Pro"
 #property link      ""
-#property version   "1.30"
-#property description "Strategy based on pending orders with Break Even, Trailing Stop, 3% Risk Management, Expiration, and Direction Inversion."
+#property version   "1.40"
+#property description "Strategy based on pending orders with Break Even, Trailing Stop, Fixed Lot (0.04), Expiration, and Direction Inversion."
 
 #include <Trade/Trade.mqh>
 #include <Trade/PositionInfo.mqh>
@@ -24,13 +24,13 @@ enum ENUM_TRADE_DIRECTION
 input group "=== Strategy Settings ==="
 input ulong                MagicNumber            = 123456;                  // Magic Number
 input ENUM_TRADE_DIRECTION TradeDirectionMode     = DIRECTION_BOTH_STANDARD; // Mode Direction des ordres
-input bool                 UseAutoLot             = true;                    // Calculate lot size based on capital risk %
+input bool                 UseAutoLot             = false;                   // Calculate lot size based on capital risk %
 input double               RiskPercent            = 3.0;                     // Risk per cycle (% of Account Balance)
-input double               FixedLotSize           = 0.01;                    // Fixed Lot Size (used if UseAutoLot = false)
-input int                  DistancePoints         = 20;                      // Order Distance from Reference Price (points)
-input int                  BreakEvenPoints        = 20;                      // Break Even Trigger Profit (points)
-input int                  TrailingStartPoints    = 30;                      // Trailing Stop Trigger Profit (points)
-input int                  TrailingDistancePoints = 20;                      // Trailing Stop Distance (points)
+input double               FixedLotSize           = 0.04;                    // Fixed Lot Size
+input int                  DistancePoints         = 200;                     // Order Distance from Reference Price (points)
+input int                  BreakEvenPoints        = 200;                     // Break Even Trigger Profit (points)
+input int                  TrailingStartPoints    = 300;                     // Trailing Stop Trigger Profit (points)
+input int                  TrailingDistancePoints = 200;                     // Trailing Stop Distance (points)
 input int                  MaxCandlesPending      = 0;                       // Refresh pending orders after N candles (0 = disabled)
 
 //--- Global Objects & Variables
@@ -209,7 +209,7 @@ void StartNewCycle()
     double upperPrice = NormalizeDouble(MathMax(refPrice + effDistance * _Point, ask + (stopLevel + 2) * _Point), _Digits);
     double lowerPrice = NormalizeDouble(MathMin(refPrice - effDistance * _Point, bid - (stopLevel + 2) * _Point), _Digits);
 
-    // Calculer le lot selon le risque
+    // Calculer le lot selon le risque ou lot fixe (0.04)
     double lot = CalculateLotSize(effDistance);
 
     bool res1 = true, res2 = true;
@@ -287,7 +287,7 @@ void ManageOpenPositions()
             {
                 double profitPoints = (bid - openPrice) / _Point;
 
-                // 4. Protection : lorsque le trade atteint +20 points -> Break Even
+                // 4. Protection : lorsque le trade atteint +200 points -> Break Even
                 if(profitPoints >= BreakEvenPoints)
                 {
                     double breakEvenSL = NormalizeDouble(openPrice, _Digits);
@@ -298,7 +298,7 @@ void ManageOpenPositions()
                     }
                 }
 
-                // 5. Gestion des gains : lorsque le trade atteint +30 points -> Trailing Stop
+                // 5. Gestion des gains : lorsque le trade atteint +300 points -> Trailing Stop
                 if(profitPoints >= TrailingStartPoints)
                 {
                     double trailSL = NormalizeDouble(bid - TrailingDistancePoints * _Point, _Digits);
@@ -312,7 +312,7 @@ void ManageOpenPositions()
             {
                 double profitPoints = (openPrice - ask) / _Point;
 
-                // 4. Protection : lorsque le trade atteint +20 points -> Break Even
+                // 4. Protection : lorsque le trade atteint +200 points -> Break Even
                 if(profitPoints >= BreakEvenPoints)
                 {
                     double breakEvenSL = NormalizeDouble(openPrice, _Digits);
@@ -323,7 +323,7 @@ void ManageOpenPositions()
                     }
                 }
 
-                // 5. Gestion des gains : lorsque le trade atteint +30 points -> Trailing Stop
+                // 5. Gestion des gains : lorsque le trade atteint +300 points -> Trailing Stop
                 if(profitPoints >= TrailingStartPoints)
                 {
                     double trailSL = NormalizeDouble(ask + TrailingDistancePoints * _Point, _Digits);
